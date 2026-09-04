@@ -186,6 +186,11 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
 .table-avatar, .channel-avatar { display: grid; place-items: center; width: 29px; height: 29px; border-radius: 7px; color: #8ceef6; background: #15343e; font-family: var(--mono); font-size: 8px; }
 .channel-avatar { color: #c4a5ff; background: #2d2443; }
 .table-more { padding: 3px; }
+.row-actions { display: inline-flex; align-items: center; gap: 4px; }
+.danger-action { color: #ff829a; }
+.danger-action:hover { color: #ffb1bf; }
+.credit-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.credit-toolbar > div { display: flex; gap: 8px; }
 .credit-summary-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; margin-bottom: 10px; }
 .credit-balance, .mini-stat { min-height: 124px; padding: 20px; border: 1px solid var(--border); border-radius: 9px; background: #0d141d; }
 .credit-balance { display: flex; align-items: center; justify-content: space-between; }
@@ -205,6 +210,8 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
 .chart-panel, .summary-panel { min-height: 290px; padding: 19px; }
 .chart-area { position: relative; height: 215px; margin-top: 19px; border: 1px solid #1a2734; border-radius: 13px; }
 .chart-grid-lines { position: absolute; inset: 16px 18px 30px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 35px, #172431 36px), repeating-linear-gradient(to right, transparent 0, transparent 45px, #111d29 46px); opacity: .72; }
+.activity-signal { position: absolute; inset: 24px 22px 35px; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; z-index: 1; }
+.activity-signal i { display: block; width: 5%; min-height: 8px; border-radius: 4px 4px 0 0; background: linear-gradient(#38dcf2, #15505b); box-shadow: 0 0 10px #38dcf244; }
 .chart-labels { position: absolute; right: 17px; bottom: 10px; left: 17px; display: flex; justify-content: space-between; color: #445669; font-family: var(--mono); font-size: 7px; }
 .summary-panel .section-kicker { margin-bottom: 17px; }
 .summary-list > div { display: flex; align-items: center; justify-content: space-between; padding: 17px 0; border-top: 1px solid #1c2934; color: #8493a5; font-size: 10px; }
@@ -245,6 +252,7 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
 .settings-nav button { display: flex; align-items: center; gap: 9px; padding: 10px; border: 0; border-radius: 6px; color: #8090a2; background: transparent; text-align: left; font-size: 10px; }
 .settings-nav button.active, .settings-nav button:hover { color: var(--cyan); background: #14303a; }
 .settings-form { display: flex; flex-direction: column; gap: 18px; max-width: 590px; padding: 23px; }
+.settings-help { color: #748598; font-size: 10px; line-height: 1.6; }
 .settings-form label, .modal-card label { display: flex; flex-direction: column; gap: 7px; color: #91a1b2; font-family: var(--mono); font-size: 8px; letter-spacing: .5px; text-transform: uppercase; }
 .settings-form input, .settings-form select, .modal-card input, .modal-card select { height: 39px; padding: 0 11px; border: 1px solid #263547; border-radius: 6px; outline: 0; color: #d9e8eb; background: #0a111a; font-family: 'Manrope', sans-serif; font-size: 10px; text-transform: none; }
 .settings-form input:focus, .settings-form select:focus, .modal-card input:focus, .modal-card select:focus { border-color: var(--cyan); }
