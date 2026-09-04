@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity,
@@ -71,7 +71,16 @@ async function apiRequest(path, options = {}) {
 
 function formatDate(value) {
   if (!value) return 'Just now'
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(value))
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown date'
+  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
+}
+
+function formatDateTime(value) {
+  if (!value) return 'Just now'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown date'
+  return new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
 }
 
 function downloadCsv(filename, rows) {
@@ -182,6 +191,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [openGroups, setOpenGroups] = useState(() => ({ Users: true, Resellers: true, Content: true, Infrastructure: true, Insights: true }))
   const [search, setSearch] = useState('')
+  const searchInputRef = useRef(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [modal, setModal] = useState(null)
@@ -191,6 +201,17 @@ function App() {
     const timeout = setTimeout(() => setToast(null), 3600)
     return () => clearTimeout(timeout)
   }, [toast])
+
+  useEffect(() => {
+    function focusSearch(event) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+    }
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [])
 
   useEffect(() => {
     fetch('/api/session', { credentials: 'include' })
@@ -289,7 +310,13 @@ function App() {
   }
 
   function handleAction(action) {
-    if (typeof action === 'string') return setModal(action)
+    if (typeof action === 'string') {
+      if (action === 'content') {
+        const contentType = activePage === 'movies' ? 'movie' : activePage === 'series' ? 'series' : 'live_tv'
+        return setModal({ type: 'content', item: { contentType } })
+      }
+      return setModal(action)
+    }
     if (action?.type === 'edit') return setModal({ type: action.entity, item: action.item })
     if (action?.type === 'settings') return runMutation('/api/settings', jsonOptions('PATCH', action.form), 'Settings saved')
     if (action?.type === 'support') return runMutation('/api/support', jsonOptions('POST', action.form), 'Support request submitted')
@@ -344,6 +371,7 @@ function App() {
           setNotificationsOpen={setNotificationsOpen}
           profileOpen={profileOpen}
           setProfileOpen={setProfileOpen}
+           searchInputRef={searchInputRef}
           onLogout={logout}
            onSettings={() => navigate('settings')}
           onMenu={() => setSidebarOpen(true)}
@@ -368,6 +396,7 @@ function App() {
                  onAction={handleAction}
                 navigate={navigate}
                 showToast={showToast}
+                refreshData={refreshData}
               />
             )}
           </div>
@@ -439,7 +468,7 @@ function LoginScreen({ onLogin, onForgotPassword }) {
         <p className="login-intro">Sign in to manage your streaming network.</p>
         <form onSubmit={submit}>
           <label>Operator ID<input autoFocus value={username} onChange={(event) => { setUsername(event.target.value); setError('') }} placeholder="Enter your operator ID" autoComplete="username" /></label>
-          <label>Password<div className="password-wrap"><input value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} type={showPassword ? 'text' : 'password'} placeholder="Enter your password" autoComplete="current-password" /><button type="button" onClick={() => setShowPassword((value) => !value)}><Eye size={16} /></button></div></label>
+          <label>Password<div className="password-wrap"><input value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} type={showPassword ? 'text' : 'password'} placeholder="Enter your password" autoComplete="current-password" /><button type="button" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((value) => !value)}><Eye size={16} /></button></div></label>
           {error && <div className="login-error"><AlertCircle size={15} />{error}</div>}
           <div className="login-options"><label className="check-label"><input type="checkbox" defaultChecked /> <span>Remember this device</span></label><button type="button" className="text-button" onClick={onForgotPassword}>Need help signing in?</button></div>
           <button className="primary-button login-button" type="submit">Sign in to console <ArrowRight size={16} /></button>
@@ -472,7 +501,7 @@ function Sidebar({ activePage, openGroups, setOpenGroups, navigate, collapsed, s
             <div className="logo-surface sidebar-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div>
             {!collapsed && <span className="sidebar-console-label">MASTER<br />CONSOLE</span>}
           </button>
-          <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
+          <button className="collapse-button" aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setCollapsed((value) => !value)}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
         </div>
         <div className="sidebar-nav">
           {navGroups.map(renderGroup)}
@@ -494,16 +523,16 @@ function NavItem({ item, active, collapsed, onClick }) {
   return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick} title={collapsed ? item.label : undefined}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span>{active && <i className="active-pip" />}</button>
 }
 
-function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, onLogout, onSettings, onMenu }) {
+function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, searchInputRef, onLogout, onSettings, onMenu }) {
   return (
     <header className="topbar">
-      <div className="mobile-header"><button onClick={onMenu}><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div></div>
+      <div className="mobile-header"><button onClick={onMenu} aria-label="Open navigation"><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div></div>
       <div className="breadcrumbs"><span>MASTER CONSOLE</span><ChevronRight size={12} /><strong>{current.eyebrow.toUpperCase()}</strong><b>{current.title}</b></div>
       <div className="topbar-actions">
-        <div className={`command-search ${searchMatches.length ? 'has-results' : ''}`}><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search command" /><kbd>⌘ K</kbd>{search && <button onClick={() => setSearch('')}><X size={13} /></button>}</div>
+        <div className={`command-search ${searchMatches.length ? 'has-results' : ''}`}><Search size={16} /><input ref={searchInputRef} aria-label="Search console pages" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search command" /><kbd>⌘ K</kbd>{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={13} /></button>}</div>
         <div className="topbar-divider" />
-        <div className="popover-wrap"><button className="icon-button notification-button" onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false) }}><Bell size={17} /><i /></button>{notificationsOpen && <div className="popover notification-popover"><div className="popover-heading"><div><strong>Notifications</strong><small>System updates</small></div><span className="new-label">2 new</span></div><div className="notification-row"><span className="notification-icon cyan"><Activity size={15} /></span><div><strong>Stream monitoring is ready</strong><small>Configure your first source to begin</small></div></div><div className="notification-row"><span className="notification-icon purple"><Sparkles size={15} /></span><div><strong>Welcome to your console</strong><small>Your workspace has been provisioned</small></div></div></div>}</div>
-        <div className="popover-wrap"><button className="profile-button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false) }}><span className="avatar small">OP</span><ChevronDown size={13} /></button>{profileOpen && <div className="popover profile-popover"><div className="profile-summary"><span className="avatar">OP</span><div><strong>Operator</strong><small>Master access</small></div></div><button onClick={() => { onSettings(); setProfileOpen(false) }}><Settings size={14} /> Account settings</button><button onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div>
+        <div className="popover-wrap"><button aria-label="Open system updates" className="icon-button notification-button" onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false) }}><Bell size={17} /><i /></button>{notificationsOpen && <div className="popover notification-popover"><div className="popover-heading"><div><strong>Notifications</strong><small>System updates</small></div><span className="new-label">Info</span></div><div className="notification-row"><span className="notification-icon cyan"><Activity size={15} /></span><div><strong>Stream monitoring is ready</strong><small>Configure your first source to begin</small></div></div><div className="notification-row"><span className="notification-icon purple"><Sparkles size={15} /></span><div><strong>Welcome to your console</strong><small>Your workspace has been provisioned</small></div></div></div>}</div>
+        <div className="popover-wrap"><button aria-label="Open operator menu" className="profile-button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false) }}><span className="avatar small">OP</span><ChevronDown size={13} /></button>{profileOpen && <div className="popover profile-popover"><div className="profile-summary"><span className="avatar">OP</span><div><strong>Operator</strong><small>Master access</small></div></div><button onClick={() => { onSettings(); setProfileOpen(false) }}><Settings size={14} /> Account settings</button><button onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div>
       </div>
     </header>
   )
@@ -521,7 +550,7 @@ function Dashboard({ summary, activity, onAction, navigate }) {
         <MetricCard label="Reseller accounts" value={metrics.resellerAccounts || 0} meta="Partner accounts" icon={UserRound} tone="orange" />
       </div>
       <div className="dashboard-grid">
-        <section className="panel quick-panel"><div className="panel-heading"><div><span className="section-kicker">SHORTCUTS</span><h2>Quick actions</h2></div><span className="muted-label">Get started</span></div><div className="quick-actions"><QuickAction icon={Users} title="Add a user" description="Create a subscriber account" onClick={() => navigate('users')} /><QuickAction icon={UserRound} title="Add reseller" description="Extend your distribution channel" onClick={() => onAction('reseller')} /><QuickAction icon={Tv} title="Add content" description="Onboard a live channel or VOD" onClick={() => onAction('content')} /><QuickAction icon={WalletCards} title="Transfer credits" description="Fund a reseller account" onClick={() => onAction('credits')} /></div></section>
+       <section className="panel quick-panel"><div className="panel-heading"><div><span className="section-kicker">SHORTCUTS</span><h2>Quick actions</h2></div><span className="muted-label">Get started</span></div><div className="quick-actions"><QuickAction icon={Users} title="Add a user" description="Create a subscriber account" onClick={() => onAction('user')} /><QuickAction icon={UserRound} title="Add reseller" description="Extend your distribution channel" onClick={() => onAction('reseller')} /><QuickAction icon={Tv} title="Add content" description="Onboard a live channel or VOD" onClick={() => onAction('content')} /><QuickAction icon={WalletCards} title="Transfer credits" description="Fund a reseller account" onClick={() => onAction('credits')} /></div></section>
         <section className="panel health-panel"><div className="panel-heading"><div><span className="section-kicker">SYSTEM HEALTH</span><h2>Network status</h2></div><span className="status-badge"><i />Operational</span></div><div className="health-status"><div className="health-ring"><div><strong>100%</strong><small>healthy</small></div></div><div className="health-list"><HealthRow label="Core services" status="Operational" /><HealthRow label="Stream delivery" status="Ready" /><HealthRow label="API gateway" status="Online" /></div></div><button className="panel-link" onClick={() => navigate('monitoring')}>Open stream monitoring <ArrowRight size={14} /></button></section>
       </div>
        <section className="panel activity-panel"><div className="panel-heading"><div><span className="section-kicker">ACTIVITY</span><h2>Recent activity</h2></div><button className="panel-link" onClick={() => navigate('user-activity')}>View all <ArrowRight size={14} /></button></div>{activity?.length ? <ActivityList items={activity.slice(0, 3)} /> : <EmptyState compact icon={Activity} title="No activity recorded" description="Events will appear here as your platform starts working." />}</section>
@@ -541,7 +570,7 @@ function HealthRow({ label, status }) {
   return <div className="health-row"><span><i className="online-dot" />{label}</span><strong>{status}</strong></div>
 }
 
-function OperationalPage({ page, meta, data, onAction, navigate, showToast }) {
+function OperationalPage({ page, meta, data, onAction, navigate, showToast, refreshData }) {
   const emptyPages = ['expiring', 'user-groups', 'user-activity', 'transactions', 'commissions', 'reseller-activity', 'movies', 'series', 'categories', 'epg', 'streams', 'stream-sources', 'stream-logs']
   const isResellers = page === 'resellers'
   const isCredits = page === 'credits'
@@ -564,7 +593,7 @@ function OperationalPage({ page, meta, data, onAction, navigate, showToast }) {
   return (
     <div className="operational-page">
       <div className="page-heading-row"><div><div className="eyebrow"><span className="eyebrow-line" />{meta.eyebrow.toUpperCase()}</div><h1>{meta.title}</h1><p className="page-description">{meta.description}</p></div>{actionLabel && <button className="primary-button" onClick={() => onAction(resolvedActionType)}><Plus size={16} />{actionLabel}</button>}</div>
-      {isMonitoring ? <MonitoringView activity={data.activity} summary={data.summary} onExport={() => showToast('Monitoring report exported')} /> : isServer ? <ServersView servers={data.servers} onAdd={() => onAction('server')} onEdit={(item) => onAction({ type: 'edit', entity: 'server', item })} onDelete={(id) => onAction({ type: 'delete-server', id })} /> : page === 'analytics' ? <AnalyticsView summary={data.summary} users={data.users} content={data.content} /> : page === 'integrations' ? <IntegrationsView integrations={data.integrations} onToggle={(id, status) => onAction({ type: 'integration', id, status })} /> : page === 'settings' ? <SettingsView settings={data.settings} onSave={(form) => onAction({ type: 'settings', form })} /> : page === 'support' ? <SupportView onSubmit={(form) => onAction({ type: 'support', form })} /> : page === 'billing' ? <BillingView invoices={data.invoices} /> : page === 'users' ? <UsersView users={data.users} packages={data.packages} groups={data.groups} onAction={() => onAction('user')} onEdit={(item) => onAction({ type: 'edit', entity: 'user', item })} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : page === 'expiring' ? <ExpiringUsersView users={data.users} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : isResellers && hasItems ? <ResellerTable resellers={resellers} onEdit={(item) => onAction({ type: 'edit', entity: 'reseller', item })} onDelete={(id) => onAction({ type: 'delete-reseller', id })} /> : (isLiveTv || isMovies || isSeries) && hasItems ? <ContentTable content={filteredContent} onEdit={(item) => onAction({ type: 'edit', entity: 'content', item })} onDelete={(id) => onAction({ type: 'delete-content', id })} /> : isCredits ? <CreditsView credits={data.summary.availableCredits || 0} transactions={data.transactions} resellers={resellers} onAction={() => onAction('credits')} onIssue={() => onAction('issue-credits')} /> : page === 'transactions' ? <TransactionList transactions={data.transactions} /> : page === 'commissions' ? <CommissionView transactions={data.transactions} /> : page === 'reseller-activity' ? <ActivityPage items={data.activity.filter((item) => item.entityType === 'reseller' || item.eventType.startsWith('reseller.'))} /> : page === 'streams' ? <StreamsView summary={data.summary} servers={data.servers} sources={data.sources} /> : page === 'stream-logs' ? <ActivityPage items={data.activity.filter((item) => item.entityType === 'source' || item.entityType === 'server' || item.eventType.includes('stream') || item.eventType.includes('source'))} /> : page === 'user-groups' ? <ManagedList title="User groups" items={data.groups} emptyTitle="No user groups created" emptyDescription="Create a group to organize access and simplify subscriber management." action={() => onAction('group')} actionLabel="Add group" onEdit={(item) => onAction({ type: 'edit', entity: 'group', item })} /> : page === 'packages' ? <ManagedList title="Subscriber packages" items={data.packages} emptyTitle="No packages created" emptyDescription="Create a package to start assigning plans to subscribers." action={() => onAction('package')} actionLabel="Add package" onEdit={(item) => onAction({ type: 'edit', entity: 'package', item })} /> : isCategory ? <ManagedList title="Content categories" items={data.categories} emptyTitle="No categories created" emptyDescription="Create categories to keep your catalog organized." action={() => onAction('category')} actionLabel="Add category" valueKey="contentCount" onEdit={(item) => onAction({ type: 'edit', entity: 'category', item })} onDelete={(id) => onAction({ type: 'delete-category', id })} /> : isSource ? <ManagedList title="Stream sources" items={data.sources} emptyTitle="No stream sources configured" emptyDescription="Connect a source to start delivering content." action={() => onAction('source')} actionLabel="Add source" valueKey="url" onEdit={(item) => onAction({ type: 'edit', entity: 'source', item })} onDelete={(id) => onAction({ type: 'delete-source', id })} /> : isEpg ? <EpgList items={data.epg} onEdit={(item) => onAction({ type: 'edit', entity: 'epg', item })} onDelete={(id) => onAction({ type: 'delete-epg', id })} /> : page === 'user-activity' ? <ActivityPage items={data.activity} /> : emptyPages.includes(page) || (!hasItems && (isResellers || isLiveTv || isMovies || isSeries)) ? <EmptyWorkspace page={page} actionType={actionType} onAction={onAction} /> : <GenericWorkspace page={page} navigate={navigate} />}
+      {isMonitoring ? <MonitoringView activity={data.activity} summary={data.summary} onExport={() => downloadCsv('stream-monitoring.csv', data.activity)} /> : isServer ? <ServersView servers={data.servers} onAdd={() => onAction('server')} onEdit={(item) => onAction({ type: 'edit', entity: 'server', item })} onDelete={(id) => onAction({ type: 'delete-server', id })} /> : page === 'analytics' ? <AnalyticsView summary={data.summary} users={data.users} content={data.content} /> : page === 'integrations' ? <IntegrationsView integrations={data.integrations} onToggle={(id, status) => onAction({ type: 'integration', id, status })} /> : page === 'settings' ? <SettingsView settings={data.settings} onSave={(form) => onAction({ type: 'settings', form })} /> : page === 'support' ? <SupportView onSubmit={(form) => onAction({ type: 'support', form })} /> : page === 'billing' ? <BillingView invoices={data.invoices} /> : page === 'users' ? <UsersView users={data.users} packages={data.packages} groups={data.groups} onAction={() => onAction('user')} onEdit={(item) => onAction({ type: 'edit', entity: 'user', item })} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : page === 'expiring' ? <ExpiringUsersView users={data.users} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : isResellers && hasItems ? <ResellerTable resellers={resellers} onEdit={(item) => onAction({ type: 'edit', entity: 'reseller', item })} onDelete={(id) => onAction({ type: 'delete-reseller', id })} /> : (isLiveTv || isMovies || isSeries) && hasItems ? <ContentTable content={filteredContent} onEdit={(item) => onAction({ type: 'edit', entity: 'content', item })} onDelete={(id) => onAction({ type: 'delete-content', id })} /> : isCredits ? <CreditsView credits={data.summary.availableCredits || 0} transactions={data.transactions} resellers={resellers} onAction={() => onAction('credits')} onIssue={() => onAction('issue-credits')} /> : page === 'transactions' ? <TransactionList transactions={data.transactions} /> : page === 'commissions' ? <CommissionView transactions={data.transactions} /> : page === 'reseller-activity' ? <ActivityPage items={data.activity} scope="reseller" title="Reseller activity" description="Review partner account events and credit operations." onRefresh={refreshData} /> : page === 'streams' ? <StreamsView summary={data.summary} servers={data.servers} sources={data.sources} /> : page === 'stream-logs' ? <ActivityPage items={data.activity} scope="stream" title="Stream logs" description="Investigate source, server, and delivery events." onRefresh={refreshData} /> : page === 'user-groups' ? <ManagedList title="User groups" items={data.groups} emptyTitle="No user groups created" emptyDescription="Create a group to organize access and simplify subscriber management." action={() => onAction('group')} actionLabel="Add group" onEdit={(item) => onAction({ type: 'edit', entity: 'group', item })} /> : page === 'packages' ? <ManagedList title="Subscriber packages" items={data.packages} emptyTitle="No packages created" emptyDescription="Create a package to start assigning plans to subscribers." action={() => onAction('package')} actionLabel="Add package" onEdit={(item) => onAction({ type: 'edit', entity: 'package', item })} /> : isCategory ? <ManagedList title="Content categories" items={data.categories} emptyTitle="No categories created" emptyDescription="Create categories to keep your catalog organized." action={() => onAction('category')} actionLabel="Add category" valueKey="contentCount" onEdit={(item) => onAction({ type: 'edit', entity: 'category', item })} onDelete={(id) => onAction({ type: 'delete-category', id })} /> : isSource ? <ManagedList title="Stream sources" items={data.sources} emptyTitle="No stream sources configured" emptyDescription="Connect a source to start delivering content." action={() => onAction('source')} actionLabel="Add source" valueKey="url" onEdit={(item) => onAction({ type: 'edit', entity: 'source', item })} onDelete={(id) => onAction({ type: 'delete-source', id })} /> : isEpg ? <EpgList items={data.epg} onEdit={(item) => onAction({ type: 'edit', entity: 'epg', item })} onDelete={(id) => onAction({ type: 'delete-epg', id })} /> : page === 'user-activity' ? <ActivityPage items={data.activity} scope="user" title="User activity" description="Review subscriber account events and operator actions that affect access." onRefresh={refreshData} /> : emptyPages.includes(page) || (!hasItems && (isResellers || isLiveTv || isMovies || isSeries)) ? <EmptyWorkspace page={page} actionType={actionType} onAction={onAction} /> : <GenericWorkspace page={page} navigate={navigate} />}
     </div>
   )
 }
@@ -634,7 +663,11 @@ function StreamsView({ summary, servers, sources }) {
 }
 
 function MonitoringView({ activity = [], summary = {}, onExport }) {
-  const streamEvents = activity.filter((item) => item.entityType === 'source' || item.entityType === 'server' || item.eventType.includes('stream'))
+  const streamEvents = activity.filter((item) => {
+    const entity = String(item.entityType || '')
+    const event = String(item.eventType || '')
+    return entity === 'source' || entity === 'server' || event.includes('stream')
+  })
   const labels = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
   return <><div className="monitor-toolbar"><div><CalendarDays size={15} />Live activity <span>— {streamEvents.length} recorded events</span></div><div><span className="muted-label">{summary.operationalServers || 0} operational servers</span><button className="primary-button small-button" onClick={onExport}><Download size={14} />Export</button></div></div><div className="monitor-grid"><div className="chart-panel panel"><span className="section-kicker">STREAM MONITORING SIGNAL</span><div className="chart-area"><div className="chart-grid-lines" />{streamEvents.length > 0 && <div className="activity-signal">{labels.map((label, index) => <i key={label} style={{ height: `${Math.max(8, Math.min(92, 18 + ((streamEvents.length + index * 7) % 70)))}%` }} />)}</div>}<div className="chart-labels">{labels.map((label) => <span key={label}>{label}</span>)}</div></div></div><div className="panel summary-panel"><span className="section-kicker">SUMMARY</span><div className="summary-list"><div><span>Observed events</span><strong>{streamEvents.length}</strong></div><div><span>Operational servers</span><strong>{summary.operationalServers || 0}</strong></div><div><span>Data completeness</span><strong>{streamEvents.length ? '100%' : '0%'}</strong></div><div><span>Last refresh</span><strong>{streamEvents[0] ? formatDate(streamEvents[0].createdAt) : 'Not yet'}</strong></div></div></div></div></>
 }
@@ -696,8 +729,50 @@ function EpgList({ items, onEdit, onDelete }) {
   return <div className="data-panel managed-list-panel"><div className="toolbar"><div><span className="section-kicker">CONTENT LIBRARY</span><h2>EPG schedules</h2></div><span className="muted-label">{items.length} scheduled</span></div>{items.length ? <div className="managed-list">{items.map((item) => <div className="managed-row" key={item.id}><span className="managed-icon epg-icon"><CalendarDays size={16} /></span><div><strong>{item.programName}</strong><small>{item.channelName} · {formatDate(item.startsAt)}</small></div><span className="managed-value">{item.status}</span><div className="row-actions"><button className="table-more" onClick={() => onEdit(item)} aria-label={`Edit ${item.programName}`}><Pencil size={14} /></button><button className="table-more danger-action" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.programName}`}><X size={15} /></button></div></div>)}</div> : <EmptyState icon={CalendarDays} title="No EPG schedules connected" description="Connect a program guide to populate your channel schedules." />}</div>
 }
 
-function ActivityPage({ items }) {
-  return <div className="data-panel activity-page-panel"><div className="toolbar"><div><span className="section-kicker">AUDIT LOG</span><h2>User and console activity</h2></div><span className="muted-label">{items.length} events</span></div>{items.length ? <ActivityList items={items} /> : <EmptyState icon={Activity} title="No user activity yet" description="Account events will appear here as your platform starts working." />}</div>
+function ActivityPage({ items = [], scope = 'all', title = 'Activity', description = 'Review recent operational events.', onRefresh }) {
+  const [query, setQuery] = useState('')
+  const [eventFilter, setEventFilter] = useState('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [page, setPage] = useState(1)
+  const [reloadKey, setReloadKey] = useState(0)
+  const [result, setResult] = useState({ items, total: items.length, page: 1, pageSize: 10, hasMore: false })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const pageSize = 10
+  const visibleItems = result.items || []
+  const pageCount = Math.max(1, Math.ceil((result.total || 0) / pageSize))
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+    const params = new URLSearchParams({ scope, page: String(page), pageSize: String(pageSize) })
+    if (query.trim()) params.set('q', query.trim())
+    if (eventFilter !== 'all') params.set('eventType', eventFilter)
+    if (fromDate) params.set('from', fromDate)
+    if (toDate) params.set('to', toDate)
+    apiRequest(`/api/activity?${params.toString()}`)
+      .then((payload) => { if (!cancelled) setResult(payload) })
+      .catch((requestError) => { if (!cancelled) setError(requestError.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [scope, page, query, eventFilter, fromDate, toDate, reloadKey])
+  useEffect(() => setPage(1), [query, eventFilter, fromDate, toDate, scope])
+  const eventTypes = [...new Set((items || []).filter((item) => {
+    const event = String(item.eventType || '').toLowerCase()
+    const entity = String(item.entityType || '').toLowerCase()
+    if (scope === 'user') return entity === 'user' || event.startsWith('user.')
+    if (scope === 'reseller') return entity === 'reseller' || entity === 'credits' || event.startsWith('reseller.') || event.startsWith('credits.')
+    if (scope === 'stream') return ['source', 'server'].includes(entity) || event.includes('stream') || event.includes('source') || event.includes('server')
+    return true
+  }).map((item) => String(item.eventType || 'unknown')))].sort()
+  const emptyTitle = scope === 'user' ? 'No user activity yet' : scope === 'reseller' ? 'No reseller activity yet' : scope === 'stream' ? 'No stream events yet' : 'No activity yet'
+  const emptyDescription = scope === 'user' ? 'Subscriber account events and access changes will appear here.' : scope === 'reseller' ? 'Partner account and credit events will appear here.' : scope === 'stream' ? 'Server, source, and delivery events will appear here.' : 'Operational events will appear here as your platform starts working.'
+  return <div className="data-panel activity-page-panel">
+    <div className="activity-page-intro"><div><span className="section-kicker">AUDIT LOG</span><h2>{title}</h2><p>{description}</p></div><span className="muted-label">{result.total || 0} matching events</span></div>
+    <div className="toolbar activity-toolbar"><div className="table-search"><Search size={15} /><input aria-label="Search activity" placeholder="Search activity" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions"><select className="activity-filter" aria-label="Filter activity type" value={eventFilter} onChange={(event) => setEventFilter(event.target.value)}><option value="all">All event types</option>{eventTypes.map((eventType) => <option key={eventType} value={eventType}>{eventType}</option>)}</select><input className="activity-date-filter" aria-label="Activity from date" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} /><input className="activity-date-filter" aria-label="Activity to date" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} /><button className="outline-button" onClick={() => downloadCsv(`${scope}-activity.csv`, visibleItems)} disabled={!visibleItems.length}><Download size={14} />Export page</button><button className="outline-button" onClick={() => { setReloadKey((value) => value + 1); onRefresh?.() }}><RefreshCw size={14} />Refresh</button></div></div>
+    {error ? <div className="activity-error"><AlertCircle size={15} /><span>{error}</span><button className="outline-button" onClick={() => setReloadKey((value) => value + 1)}>Try again</button></div> : loading ? <div className="activity-loading"><RefreshCw size={17} />Loading activity…</div> : visibleItems.length ? <><div className="activity-table-wrap"><table className="activity-table"><thead><tr><th>Event</th><th>Area</th><th>Details</th><th>Recorded</th></tr></thead><tbody>{visibleItems.map((item, index) => <tr key={item.id || `${item.eventType}-${index}`}><td><span className="event-badge">{String(item.eventType || 'activity').replaceAll('.', ' ')}</span></td><td><span className="activity-entity">{item.entityType || 'console'}</span>{item.entityId ? <small className="activity-entity-id">#{item.entityId}</small> : null}</td><td><strong>{item.message || 'Activity recorded'}</strong></td><td><time dateTime={item.createdAt || undefined} title={formatDateTime(item.createdAt)}>{formatDate(item.createdAt)}</time></td></tr>)}</tbody></table></div><div className="activity-pagination"><span>Showing {((page - 1) * pageSize) + 1}–{Math.min(page * pageSize, result.total)} of {result.total}</span><div><button className="table-more" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={15} /></button><span>Page {page} of {pageCount}</span><button className="table-more" disabled={page >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}><ChevronRight size={15} /></button></div></div></> : <EmptyState icon={Activity} title={query || eventFilter !== 'all' || fromDate || toDate ? 'No matching events' : emptyTitle} description={query || eventFilter !== 'all' || fromDate || toDate ? 'Try a different search, event type, or date range.' : emptyDescription} />}
+  </div>
 }
 
 function GenericWorkspace({ page, navigate }) {
@@ -774,28 +849,6 @@ function BackendModal({ type, item, resellers, packages, groups, onClose, onSubm
     {type === 'issue-credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Master balance</strong><span>These credits can be transferred to active resellers.</span></div></div><label>Credit amount<input autoFocus type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label></>}
     {type === 'credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Available to transfer</strong><span>Choose a reseller and amount below</span></div></div><label>Destination reseller<select autoFocus value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="" disabled>Select a reseller</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name} · {item.credits} credits</option>)}</select></label><label>Credit amount<input type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label></>}
     {error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button">{type === 'credits' ? 'Transfer credits' : type === 'issue-credits' ? 'Issue credits' : item ? 'Save changes' : 'Create and continue'}<ArrowRight size={15} /></button></div></form></div></div>
-}
-
-function Modal({ type, onClose, onAddReseller, onAddContent, onTransfer }) {
-  const [form, setForm] = useState(type === 'reseller' ? { name: '', email: '', capacity: '100', credits: '0' } : type === 'content' ? { name: '', category: 'Entertainment', country: 'Pakistan', source: 'Primary origin' } : { amount: '' })
-  const [error, setError] = useState('')
-  const title = type === 'reseller' ? 'Add reseller account' : type === 'content' ? 'Add live content' : 'Transfer credits'
-  const description = type === 'reseller' ? 'Create a partner account with an initial allocation.' : type === 'content' ? 'Add a channel to your live TV library.' : 'Allocate credits to your reseller network.'
-  function update(key, value) { setForm((current) => ({ ...current, [key]: value })); setError('') }
-  function submit(event) {
-    event.preventDefault()
-    if (type === 'reseller') {
-      if (!form.name.trim() || !form.email.trim()) return setError('Add a reseller name and email to continue.')
-      onAddReseller(form)
-    } else if (type === 'content') {
-      if (!form.name.trim()) return setError('Add a channel name to continue.')
-      onAddContent(form)
-    } else {
-      if (!form.amount || Number(form.amount) <= 0) return setError('Enter a credit amount greater than zero.')
-      onTransfer(form.amount)
-    }
-  }
-  return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="modal-card"><div className="modal-header"><div><span className="section-kicker">MASTER CONSOLE</span><h2>{title}</h2><p>{description}</p></div><button className="close-button" onClick={onClose}><X size={17} /></button></div><form onSubmit={submit}>{type === 'reseller' && <><label>Account name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. North Star IPTV" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="partner@example.com" /></label><div className="form-row"><label>User capacity<input type="number" min="1" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label><label>Starting credits<input type="number" min="0" value={form.credits} onChange={(event) => update('credits', event.target.value)} /></label></div></>}{type === 'content' && <><label>Channel name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. XTREAM News" /></label><div className="form-row"><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Entertainment</option><option>News</option><option>Sports</option><option>Kids</option></select></label><label>Country<select value={form.country} onChange={(event) => update('country', event.target.value)}><option>Pakistan</option><option>United Kingdom</option><option>United States</option><option>International</option></select></label></div><label>Stream source<input value={form.source} onChange={(event) => update('source', event.target.value)} placeholder="Primary origin" /></label></>}{type === 'credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Available to transfer</strong><span>0 credits in master balance</span></div></div><label>Credit amount<input autoFocus type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label><label>Destination reseller<select defaultValue=""><option value="" disabled>Select a reseller</option><option>New reseller account</option></select></label></>}{error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button">{type === 'credits' ? 'Transfer credits' : 'Create and continue'}<ArrowRight size={15} /></button></div></form></div></div>
 }
 
 createRoot(document.getElementById('root')).render(<App />)

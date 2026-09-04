@@ -135,6 +135,40 @@ app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
   })
 }))
 
+app.get('/api/activity', requireAuth, asyncRoute(async (req, res) => {
+  const scope = ['user', 'reseller', 'stream', 'all'].includes(req.query.scope) ? req.query.scope : 'all'
+  const query = text(req.query.q).slice(0, 120)
+  const eventType = text(req.query.eventType).slice(0, 120)
+  const from = dateOrNull(req.query.from)
+  const to = dateOrNull(req.query.to)
+  const pageSize = Math.min(50, Math.max(5, positiveInt(req.query.pageSize, 10)))
+  const page = Math.max(1, positiveInt(req.query.page, 1))
+  const params = []
+  const conditions = []
+  function add(value) {
+    params.push(value)
+    return `$${params.length}`
+  }
+  if (scope === 'user') conditions.push(`(entity_type = 'user' OR event_type LIKE 'user.%')`)
+  if (scope === 'reseller') conditions.push(`(entity_type IN ('reseller', 'credits') OR event_type LIKE 'reseller.%' OR event_type LIKE 'credits.%')`)
+  if (scope === 'stream') conditions.push(`(entity_type IN ('source', 'server') OR event_type ILIKE '%stream%' OR event_type ILIKE '%source%' OR event_type ILIKE '%server%')`)
+  if (query) {
+    const value = `%${query}%`
+    const placeholder = add(value)
+    conditions.push(`(message ILIKE ${placeholder} OR event_type ILIKE ${placeholder} OR COALESCE(entity_type, '') ILIKE ${placeholder})`)
+  }
+  if (eventType) conditions.push(`event_type = ${add(eventType)}`)
+  if (from) conditions.push(`created_at >= ${add(from)}`)
+  if (to) conditions.push(`created_at < ${add(new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000).toISOString())}`)
+  const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
+  const countResult = await pool.query(`SELECT COUNT(*)::int AS total FROM activity_logs ${where}`, params)
+  const total = countResult.rows[0].total
+  const offset = (page - 1) * pageSize
+  const itemsResult = await pool.query(`SELECT id, event_type AS "eventType", message, entity_type AS "entityType", entity_id AS "entityId", created_at AS "createdAt"
+    FROM activity_logs ${where} ORDER BY created_at DESC, id DESC LIMIT ${pageSize} OFFSET ${offset}`, params)
+  res.json({ items: itemsResult.rows, total, page, pageSize, hasMore: offset + itemsResult.rows.length < total })
+}))
+
 app.get('/api/users', requireAuth, asyncRoute(async (req, res) => {
   const q = text(req.query.q)
   const result = await pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt",
@@ -170,6 +204,7 @@ app.patch('/api/users/:id', requireAuth, asyncRoute(async (req, res) => {
     WHERE id = $8 RETURNING id, name, username, email, status, expires_at AS "expiresAt"`,
   [text(req.body?.name), username, req.body?.email == null ? null : text(req.body.email), ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : null, dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null, id])
   if (!result.rowCount) return res.status(404).json({ message: 'Subscriber not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['user.updated', `Subscriber ${result.rows[0].name} was updated.`, 'user', id])
   res.json({ item: result.rows[0] })
 }))
 
@@ -449,6 +484,7 @@ app.patch('/api/resellers/:id', requireAuth, asyncRoute(async (req, res) => {
     RETURNING id, name, email, capacity, credits, status, created_at AS "createdAt"`,
   [text(req.body?.name), text(req.body?.email), positiveInt(req.body?.capacity) || null, ['active', 'suspended'].includes(req.body?.status) ? req.body.status : null, positiveInt(req.params.id)])
   if (!result.rowCount) return res.status(404).json({ message: 'Reseller not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['reseller.updated', `Reseller ${result.rows[0].name} was updated.`, 'reseller', positiveInt(req.params.id)])
   res.json({ item: result.rows[0] })
 }))
 
@@ -491,6 +527,7 @@ app.patch('/api/content/:id', requireAuth, asyncRoute(async (req, res) => {
     RETURNING id, name, content_type AS "contentType", category, country, source, status`,
   [text(req.body?.name), contentType, text(req.body?.category), text(req.body?.country), text(req.body?.source), ['active', 'disabled'].includes(req.body?.status) ? req.body.status : null, positiveInt(req.params.id)])
   if (!result.rowCount) return res.status(404).json({ message: 'Content item not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['content.updated', `Content ${result.rows[0].name} was updated.`, 'content', positiveInt(req.params.id)])
   res.json({ item: result.rows[0] })
 }))
 
