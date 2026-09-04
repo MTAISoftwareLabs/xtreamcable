@@ -1,45 +1,496 @@
 import express from 'express'
 import session from 'express-session'
+import pg from 'pg'
 import { createServer as createViteServer } from 'vite'
 
+const { Pool } = pg
 const app = express()
 const port = 5000
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
-app.use(express.json())
+app.set('trust proxy', 1)
+app.use(express.json({ limit: '1mb' }))
 app.use(session({
   secret: process.env.SESSION_SECRET || 'local-development-session-secret',
   resave: false,
   saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 1000 * 60 * 60 * 12,
-  },
+  cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 },
 }))
+
+const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
+
+function requireAuth(req, res, next) {
+  if (!req.session.user) return res.status(401).json({ message: 'Your operator session has expired.' })
+  next()
+}
+
+function text(value, fallback = '') {
+  return String(value ?? fallback).trim()
+}
+
+function positiveInt(value, fallback = 0) {
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function dateOrNull(value) {
+  if (!value) return null
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime()) ? null : value
+}
+
+async function logActivity(client, eventType, message, entityType = null, entityId = null) {
+  await client.query(
+    'INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)',
+    [eventType, message, entityType, entityId],
+  )
+}
+
+async function withTransaction(work) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await work(client)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
 
 app.get('/api/session', (req, res) => {
   res.json({ authenticated: Boolean(req.session.user), user: req.session.user || null })
 })
 
-app.post('/api/login', (req, res) => {
-  const username = String(req.body?.username || '').trim().toLowerCase()
+app.post('/api/login', asyncRoute(async (req, res) => {
+  const username = text(req.body?.username).toLowerCase()
   const password = String(req.body?.password || '')
-
   if (username !== 'operator' || password !== 'xtream2026') {
     return res.status(401).json({ message: 'That operator ID or password is not recognized.' })
   }
-
   req.session.user = { name: 'Operator', role: 'Master access' }
   return res.json({ authenticated: true, user: req.session.user })
-})
+}))
 
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ authenticated: false }))
 })
 
-const vite = await createViteServer({
-  server: { middlewareMode: true, host: true },
+app.get('/api/health', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query('SELECT NOW() AS checked_at')
+  res.json({ status: 'operational', checkedAt: result.rows[0].checked_at })
+}))
+
+app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
+  const [settings, users, groups, packages, resellers, content, servers, sources, categories, epg, transactions, activity] = await Promise.all([
+    pool.query('SELECT id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts" FROM console_settings WHERE id = 1'),
+    pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt", s.created_at AS "createdAt",
+      p.name AS "packageName", g.name AS "groupName"
+      FROM subscribers s LEFT JOIN packages p ON p.id = s.package_id LEFT JOIN user_groups g ON g.id = s.group_id
+      ORDER BY s.created_at DESC`),
+    pool.query(`SELECT g.id, g.name, g.description, COUNT(s.id)::int AS "memberCount", g.created_at AS "createdAt"
+      FROM user_groups g LEFT JOIN subscribers s ON s.group_id = g.id GROUP BY g.id ORDER BY g.created_at DESC`),
+    pool.query(`SELECT id, name, description, duration_days AS "durationDays", price, status, created_at AS "createdAt"
+      FROM packages ORDER BY created_at DESC`),
+    pool.query(`SELECT id, name, email, capacity, credits, status, created_at AS "createdAt"
+      FROM resellers ORDER BY created_at DESC`),
+    pool.query(`SELECT id, name, content_type AS "contentType", category, country, source, status, created_at AS "createdAt"
+      FROM content_items ORDER BY created_at DESC`),
+    pool.query(`SELECT id, name, host, status, capacity, created_at AS "createdAt"
+      FROM servers ORDER BY created_at DESC`),
+    pool.query(`SELECT id, name, url, status, created_at AS "createdAt"
+      FROM stream_sources ORDER BY created_at DESC`),
+    pool.query(`SELECT id, name, description, content_count AS "contentCount", created_at AS "createdAt"
+      FROM content_categories ORDER BY created_at DESC`),
+    pool.query(`SELECT id, channel_name AS "channelName", program_name AS "programName", starts_at AS "startsAt", ends_at AS "endsAt", status, created_at AS "createdAt"
+      FROM epg_schedules ORDER BY starts_at ASC`),
+    pool.query(`SELECT t.id, t.reseller_id AS "resellerId", r.name AS "resellerName", t.amount, t.direction, t.description, t.created_at AS "createdAt"
+      FROM credit_transactions t LEFT JOIN resellers r ON r.id = t.reseller_id ORDER BY t.created_at DESC LIMIT 100`),
+    pool.query(`SELECT id, event_type AS "eventType", message, entity_type AS "entityType", entity_id AS "entityId", created_at AS "createdAt"
+      FROM activity_logs ORDER BY created_at DESC LIMIT 50`),
+  ])
+  const [summary, balance] = await Promise.all([
+    pool.query(`SELECT
+      (SELECT COUNT(*)::int FROM subscribers WHERE status = 'active') AS "activeSubscribers",
+      (SELECT COUNT(*)::int FROM content_items WHERE content_type = 'live_tv' AND status = 'active') AS "liveChannels",
+      (SELECT COUNT(*)::int FROM resellers WHERE status = 'active') AS "resellerAccounts",
+      (SELECT COUNT(*)::int FROM servers WHERE status = 'operational') AS "operationalServers"`),
+    pool.query(`SELECT COALESCE(SUM(CASE WHEN direction = 'issued' THEN amount ELSE 0 END), 0)::int -
+      COALESCE(SUM(CASE WHEN direction IN ('transferred','used') THEN amount ELSE 0 END), 0)::int AS balance
+      FROM credit_transactions`),
+  ])
+  res.json({
+    settings: settings.rows[0] || { id: 1, consoleName: 'XTREAM CABLE', timezone: 'Asia/Karachi', operationalAlerts: true },
+    users: users.rows, groups: groups.rows, packages: packages.rows, resellers: resellers.rows,
+    content: content.rows, servers: servers.rows, sources: sources.rows, categories: categories.rows, epg: epg.rows, transactions: transactions.rows,
+    activity: activity.rows, summary: { ...summary.rows[0], availableCredits: balance.rows[0].balance },
+  })
+}))
+
+app.get('/api/users', requireAuth, asyncRoute(async (req, res) => {
+  const q = text(req.query.q)
+  const result = await pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt",
+    p.name AS "packageName", g.name AS "groupName", s.created_at AS "createdAt"
+    FROM subscribers s LEFT JOIN packages p ON p.id = s.package_id LEFT JOIN user_groups g ON g.id = s.group_id
+    WHERE ($1 = '' OR s.name ILIKE '%' || $1 || '%' OR s.username ILIKE '%' || $1 || '%' OR s.email ILIKE '%' || $1 || '%')
+    ORDER BY s.created_at DESC`, [q])
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/users', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const username = text(req.body?.username).toLowerCase()
+  const email = text(req.body?.email)
+  if (!name || !username) return res.status(400).json({ message: 'Name and username are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO subscribers (name, username, email, status, expires_at, package_id, group_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, name, username, email, status, expires_at AS "expiresAt", created_at AS "createdAt"`,
+    [name, username, email, ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : 'active', dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null])
+    await logActivity(client, 'user.created', `Subscriber ${name} was created.`, 'user', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.patch('/api/users/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query(`UPDATE subscribers SET name = COALESCE(NULLIF($1,''), name),
+    email = COALESCE($2, email), status = COALESCE($3, status), expires_at = COALESCE($4, expires_at),
+    package_id = COALESCE($5, package_id), group_id = COALESCE($6, group_id)
+    WHERE id = $7 RETURNING id, name, username, email, status, expires_at AS "expiresAt"`,
+  [text(req.body?.name), req.body?.email == null ? null : text(req.body.email), ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : null, dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null, id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Subscriber not found.' })
+  res.json({ item: result.rows[0] })
+}))
+
+app.delete('/api/users/:id', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query('DELETE FROM subscribers WHERE id = $1 RETURNING name', [positiveInt(req.params.id)])
+  if (!result.rowCount) return res.status(404).json({ message: 'Subscriber not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['user.deleted', `Subscriber ${result.rows[0].name} was removed.`, 'user', positiveInt(req.params.id)])
+  res.status(204).end()
+}))
+
+app.get('/api/groups', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT g.id, g.name, g.description, COUNT(s.id)::int AS "memberCount", g.created_at AS "createdAt"
+    FROM user_groups g LEFT JOIN subscribers s ON s.group_id = g.id GROUP BY g.id ORDER BY g.created_at DESC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/groups', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  if (!name) return res.status(400).json({ message: 'Group name is required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO user_groups (name, description) VALUES ($1, $2)
+      RETURNING id, name, description, member_count AS "memberCount", created_at AS "createdAt"`, [name, text(req.body?.description)])
+    await logActivity(client, 'group.created', `User group ${name} was created.`, 'group', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/groups/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM user_groups WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'User group not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['group.deleted', `User group ${result.rows[0].name} was removed.`, 'group', id])
+  res.status(204).end()
+}))
+
+app.get('/api/packages', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, name, description, duration_days AS "durationDays", price, status, created_at AS "createdAt"
+    FROM packages ORDER BY created_at DESC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/packages', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const durationDays = positiveInt(req.body?.durationDays, 30)
+  const price = Number(req.body?.price || 0)
+  if (!name || durationDays < 1 || !Number.isFinite(price) || price < 0) return res.status(400).json({ message: 'Name, duration, and a valid price are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO packages (name, description, duration_days, price) VALUES ($1, $2, $3, $4)
+      RETURNING id, name, description, duration_days AS "durationDays", price, status, created_at AS "createdAt"`, [name, text(req.body?.description), durationDays, price])
+    await logActivity(client, 'package.created', `Package ${name} was created.`, 'package', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/packages/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM packages WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Package not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['package.deleted', `Package ${result.rows[0].name} was removed.`, 'package', id])
+  res.status(204).end()
+}))
+
+app.get('/api/servers', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, name, host, status, capacity, created_at AS "createdAt"
+    FROM servers ORDER BY created_at DESC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/servers', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const host = text(req.body?.host)
+  const capacity = positiveInt(req.body?.capacity, 100)
+  if (!name || !host || capacity > 100) return res.status(400).json({ message: 'Server name, host, and a valid capacity are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO servers (name, host, capacity) VALUES ($1, $2, $3)
+      RETURNING id, name, host, status, capacity, created_at AS "createdAt"`, [name, host, capacity])
+    await logActivity(client, 'server.created', `Server ${name} was added.`, 'server', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/servers/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM servers WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Server not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['server.deleted', `Server ${result.rows[0].name} was removed.`, 'server', id])
+  res.status(204).end()
+}))
+
+app.get('/api/sources', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, name, url, status, created_at AS "createdAt"
+    FROM stream_sources ORDER BY created_at DESC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/sources', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const url = text(req.body?.url)
+  if (!name || !url) return res.status(400).json({ message: 'Source name and URL are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO stream_sources (name, url) VALUES ($1, $2)
+      RETURNING id, name, url, status, created_at AS "createdAt"`, [name, url])
+    await logActivity(client, 'source.created', `Stream source ${name} was added.`, 'source', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/sources/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM stream_sources WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Stream source not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['source.deleted', `Stream source ${result.rows[0].name} was removed.`, 'source', id])
+  res.status(204).end()
+}))
+
+app.get('/api/categories', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, name, description, content_count AS "contentCount", created_at AS "createdAt"
+    FROM content_categories ORDER BY created_at DESC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/categories', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  if (!name) return res.status(400).json({ message: 'Category name is required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO content_categories (name, description) VALUES ($1, $2)
+      RETURNING id, name, description, content_count AS "contentCount", created_at AS "createdAt"`, [name, text(req.body?.description)])
+    await logActivity(client, 'category.created', `Category ${name} was created.`, 'category', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/categories/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM content_categories WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Category not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['category.deleted', `Category ${result.rows[0].name} was removed.`, 'category', id])
+  res.status(204).end()
+}))
+
+app.get('/api/epg', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, channel_name AS "channelName", program_name AS "programName", starts_at AS "startsAt", ends_at AS "endsAt", status, created_at AS "createdAt"
+    FROM epg_schedules ORDER BY starts_at ASC`)
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/epg', requireAuth, asyncRoute(async (req, res) => {
+  const channelName = text(req.body?.channelName)
+  const programName = text(req.body?.programName)
+  const startsAt = dateOrNull(req.body?.startsAt)
+  const endsAt = dateOrNull(req.body?.endsAt)
+  if (!channelName || !programName || !startsAt || !endsAt || new Date(endsAt) <= new Date(startsAt)) return res.status(400).json({ message: 'Channel, program, and a valid time range are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO epg_schedules (channel_name, program_name, starts_at, ends_at)
+      VALUES ($1, $2, $3, $4) RETURNING id, channel_name AS "channelName", program_name AS "programName", starts_at AS "startsAt", ends_at AS "endsAt", status, created_at AS "createdAt"`, [channelName, programName, startsAt, endsAt])
+    await logActivity(client, 'epg.created', `EPG schedule ${programName} was added.`, 'epg', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.delete('/api/epg/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM epg_schedules WHERE id = $1 RETURNING program_name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'EPG schedule not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['epg.deleted', `EPG schedule ${result.rows[0].program_name} was removed.`, 'epg', id])
+  res.status(204).end()
+}))
+
+app.get('/api/resellers', requireAuth, asyncRoute(async (req, res) => {
+  const q = text(req.query.q)
+  const result = await pool.query(`SELECT id, name, email, capacity, credits, status, created_at AS "createdAt" FROM resellers
+    WHERE ($1 = '' OR name ILIKE '%' || $1 || '%' OR email ILIKE '%' || $1 || '%') ORDER BY created_at DESC`, [q])
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/resellers', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const email = text(req.body?.email)
+  const capacity = positiveInt(req.body?.capacity, 100)
+  const credits = positiveInt(req.body?.credits)
+  if (!name || !email || capacity < 1) return res.status(400).json({ message: 'Name, email, and a valid capacity are required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO resellers (name, email, capacity, credits) VALUES ($1, $2, $3, $4)
+      RETURNING id, name, email, capacity, credits, status, created_at AS "createdAt"`, [name, email, capacity, credits])
+    if (credits > 0) await client.query(`INSERT INTO credit_transactions (reseller_id, amount, direction, description) VALUES ($1, $2, 'issued', $3)`, [inserted.rows[0].id, credits, `Initial allocation for ${name}`])
+    await logActivity(client, 'reseller.created', `Reseller ${name} was created.`, 'reseller', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.patch('/api/resellers/:id', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`UPDATE resellers SET name = COALESCE(NULLIF($1,''), name), email = COALESCE(NULLIF($2,''), email),
+    capacity = COALESCE($3, capacity), status = COALESCE($4, status) WHERE id = $5
+    RETURNING id, name, email, capacity, credits, status, created_at AS "createdAt"`,
+  [text(req.body?.name), text(req.body?.email), positiveInt(req.body?.capacity) || null, ['active', 'suspended'].includes(req.body?.status) ? req.body.status : null, positiveInt(req.params.id)])
+  if (!result.rowCount) return res.status(404).json({ message: 'Reseller not found.' })
+  res.json({ item: result.rows[0] })
+}))
+
+app.delete('/api/resellers/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM resellers WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Reseller not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['reseller.deleted', `Reseller ${result.rows[0].name} was removed.`, 'reseller', id])
+  res.status(204).end()
+}))
+
+app.get('/api/content', requireAuth, asyncRoute(async (req, res) => {
+  const q = text(req.query.q)
+  const type = ['live_tv', 'movie', 'series'].includes(req.query.type) ? req.query.type : null
+  const result = await pool.query(`SELECT id, name, content_type AS "contentType", category, country, source, status, created_at AS "createdAt"
+    FROM content_items WHERE ($1 = '' OR name ILIKE '%' || $1 || '%' OR category ILIKE '%' || $1 || '%')
+    AND ($2::text IS NULL OR content_type = $2) ORDER BY created_at DESC`, [q, type])
+  res.json({ items: result.rows })
+}))
+
+app.post('/api/content', requireAuth, asyncRoute(async (req, res) => {
+  const name = text(req.body?.name)
+  const contentType = ['live_tv', 'movie', 'series'].includes(req.body?.contentType) ? req.body.contentType : 'live_tv'
+  if (!name) return res.status(400).json({ message: 'Content name is required.' })
+  const result = await withTransaction(async (client) => {
+    const inserted = await client.query(`INSERT INTO content_items (name, content_type, category, country, source)
+      VALUES ($1, $2, $3, $4, $5) RETURNING id, name, content_type AS "contentType", category, country, source, status, created_at AS "createdAt"`,
+    [name, contentType, text(req.body?.category, 'Entertainment'), text(req.body?.country, 'International'), text(req.body?.source, 'Primary origin')])
+    await logActivity(client, 'content.created', `${name} was added to the content library.`, 'content', inserted.rows[0].id)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.patch('/api/content/:id', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`UPDATE content_items SET name = COALESCE(NULLIF($1,''), name),
+    category = COALESCE(NULLIF($2,''), category), country = COALESCE(NULLIF($3,''), country),
+    source = COALESCE(NULLIF($4,''), source), status = COALESCE($5, status) WHERE id = $6
+    RETURNING id, name, content_type AS "contentType", category, country, source, status`,
+  [text(req.body?.name), text(req.body?.category), text(req.body?.country), text(req.body?.source), ['active', 'disabled'].includes(req.body?.status) ? req.body.status : null, positiveInt(req.params.id)])
+  if (!result.rowCount) return res.status(404).json({ message: 'Content item not found.' })
+  res.json({ item: result.rows[0] })
+}))
+
+app.delete('/api/content/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const result = await pool.query('DELETE FROM content_items WHERE id = $1 RETURNING name', [id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Content item not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['content.deleted', `${result.rows[0].name} was removed from the library.`, 'content', id])
+  res.status(204).end()
+}))
+
+app.get('/api/credits', requireAuth, asyncRoute(async (req, res) => {
+  const [transactions, balance] = await Promise.all([
+    pool.query(`SELECT t.id, t.reseller_id AS "resellerId", r.name AS "resellerName", t.amount, t.direction, t.description, t.created_at AS "createdAt"
+      FROM credit_transactions t LEFT JOIN resellers r ON r.id = t.reseller_id ORDER BY t.created_at DESC LIMIT 100`),
+    pool.query(`SELECT COALESCE(SUM(CASE WHEN direction = 'issued' THEN amount ELSE 0 END), 0)::int -
+      COALESCE(SUM(CASE WHEN direction IN ('transferred','used') THEN amount ELSE 0 END), 0)::int AS balance FROM credit_transactions`),
+  ])
+  res.json({ balance: balance.rows[0].balance, transactions: transactions.rows })
+}))
+
+app.post('/api/credits/transfer', requireAuth, asyncRoute(async (req, res) => {
+  const resellerId = positiveInt(req.body?.resellerId)
+  const amount = positiveInt(req.body?.amount)
+  if (!resellerId || amount < 1) return res.status(400).json({ message: 'Choose a reseller and enter a valid amount.' })
+  const result = await withTransaction(async (client) => {
+    const balance = await client.query(`SELECT COALESCE(SUM(CASE WHEN direction = 'issued' THEN amount ELSE 0 END), 0)::int -
+      COALESCE(SUM(CASE WHEN direction IN ('transferred','used') THEN amount ELSE 0 END), 0)::int AS balance FROM credit_transactions`)
+    if (Number(balance.rows[0].balance) < amount) {
+      const error = new Error('The master balance does not have enough credits for this transfer.')
+      error.status = 400
+      throw error
+    }
+    const reseller = await client.query('SELECT id, name FROM resellers WHERE id = $1 FOR UPDATE', [resellerId])
+    if (!reseller.rowCount) {
+      const error = new Error('Reseller not found.')
+      error.status = 404
+      throw error
+    }
+    await client.query('UPDATE resellers SET credits = credits + $1 WHERE id = $2', [amount, resellerId])
+    const inserted = await client.query(`INSERT INTO credit_transactions (reseller_id, amount, direction, description)
+      VALUES ($1, $2, 'transferred', $3) RETURNING id, amount, direction, description, created_at AS "createdAt"`,
+    [resellerId, amount, `Transfer to ${reseller.rows[0].name}`])
+    await logActivity(client, 'credits.transferred', `${amount} credits transferred to ${reseller.rows[0].name}.`, 'reseller', resellerId)
+    return inserted.rows[0]
+  })
+  res.status(201).json({ item: result })
+}))
+
+app.get('/api/settings', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query('SELECT id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts" FROM console_settings WHERE id = 1')
+  res.json({ settings: result.rows[0] })
+}))
+
+app.patch('/api/settings', requireAuth, asyncRoute(async (req, res) => {
+  const consoleName = text(req.body?.consoleName, 'XTREAM CABLE').slice(0, 80)
+  const timezone = text(req.body?.timezone, 'Asia/Karachi')
+  const result = await pool.query(`UPDATE console_settings SET console_name = $1, timezone = $2,
+    operational_alerts = $3, updated_at = NOW() WHERE id = 1
+    RETURNING id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts"`,
+  [consoleName, timezone, req.body?.operationalAlerts !== false])
+  res.json({ settings: result.rows[0] })
+}))
+
+app.post('/api/support', requireAuth, asyncRoute(async (req, res) => {
+  const subject = text(req.body?.subject)
+  const message = text(req.body?.message)
+  if (!subject || !message) return res.status(400).json({ message: 'Subject and message are required.' })
+  const result = await pool.query(`INSERT INTO support_requests (subject, message) VALUES ($1, $2)
+    RETURNING id, subject, message, status, created_at AS "createdAt"`, [subject, message])
+  await pool.query('INSERT INTO activity_logs (event_type, message) VALUES ($1, $2)', ['support.created', `Support request "${subject}" was submitted.`])
+  res.status(201).json({ item: result.rows[0] })
+}))
+
+app.use((error, req, res, next) => {
+  console.error(error)
+  if (res.headersSent) return next(error)
+  const status = error.code === '23505' ? 409 : error.status || 500
+  const message = error.code === '23505' ? 'That record already exists.' : status === 500 ? 'The server could not complete that request.' : error.message
+  res.status(status).json({ message })
 })
+
+const vite = await createViteServer({ server: { middlewareMode: true, host: true } })
 app.use(vite.middlewares)
 
 app.listen(port, '0.0.0.0', () => {
