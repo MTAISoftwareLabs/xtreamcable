@@ -85,7 +85,7 @@ app.get('/api/health', requireAuth, asyncRoute(async (req, res) => {
 }))
 
 app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
-  const [settings, users, groups, packages, resellers, content, servers, sources, categories, epg, transactions, activity] = await Promise.all([
+  const [settings, users, groups, packages, resellers, content, servers, sources, categories, epg, transactions, activity, integrations, invoices] = await Promise.all([
     pool.query('SELECT id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts" FROM console_settings WHERE id = 1'),
     pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt", s.created_at AS "createdAt",
       p.name AS "packageName", g.name AS "groupName"
@@ -111,6 +111,10 @@ app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
       FROM credit_transactions t LEFT JOIN resellers r ON r.id = t.reseller_id ORDER BY t.created_at DESC LIMIT 100`),
     pool.query(`SELECT id, event_type AS "eventType", message, entity_type AS "entityType", entity_id AS "entityId", created_at AS "createdAt"
       FROM activity_logs ORDER BY created_at DESC LIMIT 50`),
+    pool.query(`SELECT id, slug, name, description, status, updated_at AS "updatedAt"
+      FROM console_integrations ORDER BY id ASC`),
+    pool.query(`SELECT id, invoice_number AS "invoiceNumber", period_label AS "periodLabel", amount, status, issued_at AS "issuedAt"
+      FROM billing_invoices ORDER BY issued_at DESC`),
   ])
   const [summary, balance] = await Promise.all([
     pool.query(`SELECT
@@ -126,7 +130,8 @@ app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
     settings: settings.rows[0] || { id: 1, consoleName: 'XTREAM CABLE', timezone: 'Asia/Karachi', operationalAlerts: true },
     users: users.rows, groups: groups.rows, packages: packages.rows, resellers: resellers.rows,
     content: content.rows, servers: servers.rows, sources: sources.rows, categories: categories.rows, epg: epg.rows, transactions: transactions.rows,
-    activity: activity.rows, summary: { ...summary.rows[0], availableCredits: balance.rows[0].balance },
+    activity: activity.rows, integrations: integrations.rows, invoices: invoices.rows,
+    summary: { ...summary.rows[0], availableCredits: balance.rows[0].balance },
   })
 }))
 
@@ -460,6 +465,29 @@ app.post('/api/credits/transfer', requireAuth, asyncRoute(async (req, res) => {
 app.get('/api/settings', requireAuth, asyncRoute(async (req, res) => {
   const result = await pool.query('SELECT id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts" FROM console_settings WHERE id = 1')
   res.json({ settings: result.rows[0] })
+}))
+
+app.get('/api/integrations', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, slug, name, description, status, updated_at AS "updatedAt"
+    FROM console_integrations ORDER BY id ASC`)
+  res.json({ items: result.rows })
+}))
+
+app.patch('/api/integrations/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = positiveInt(req.params.id)
+  const status = ['available', 'configured', 'disabled'].includes(req.body?.status) ? req.body.status : null
+  if (!status) return res.status(400).json({ message: 'A valid integration status is required.' })
+  const result = await pool.query(`UPDATE console_integrations SET status = $1, updated_at = NOW()
+    WHERE id = $2 RETURNING id, slug, name, description, status, updated_at AS "updatedAt"`, [status, id])
+  if (!result.rowCount) return res.status(404).json({ message: 'Integration not found.' })
+  await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['integration.updated', `Integration ${result.rows[0].name} is now ${status}.`, 'integration', id])
+  res.json({ item: result.rows[0] })
+}))
+
+app.get('/api/billing/invoices', requireAuth, asyncRoute(async (req, res) => {
+  const result = await pool.query(`SELECT id, invoice_number AS "invoiceNumber", period_label AS "periodLabel", amount, status, issued_at AS "issuedAt"
+    FROM billing_invoices ORDER BY issued_at DESC`)
+  res.json({ items: result.rows })
 }))
 
 app.patch('/api/settings', requireAuth, asyncRoute(async (req, res) => {

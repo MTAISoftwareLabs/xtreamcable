@@ -204,7 +204,23 @@ function App() {
     setDataLoading(true)
     setDataError('')
     try {
-      setData(await apiRequest('/api/bootstrap'))
+      const payload = await apiRequest('/api/bootstrap')
+      setData({
+        ...payload,
+        users: payload.users || [],
+        groups: payload.groups || [],
+        packages: payload.packages || [],
+        resellers: payload.resellers || [],
+        content: payload.content || [],
+        servers: payload.servers || [],
+        sources: payload.sources || [],
+        categories: payload.categories || [],
+        epg: payload.epg || [],
+        transactions: payload.transactions || [],
+        activity: payload.activity || [],
+        integrations: payload.integrations || [],
+        invoices: payload.invoices || [],
+      })
     } catch (error) {
       setDataError(error.message)
     } finally {
@@ -333,6 +349,7 @@ function App() {
                   if (typeof action === 'string') setModal(action)
                   if (action?.type === 'settings') runMutation('/api/settings', jsonOptions('PATCH', action.form), 'Settings saved')
                   if (action?.type === 'support') runMutation('/api/support', jsonOptions('POST', action.form), 'Support request submitted')
+                  if (action?.type === 'integration') runMutation(`/api/integrations/${action.id}`, jsonOptions('PATCH', { status: action.status }), 'Integration status updated')
                   if (action?.type === 'delete-reseller') runMutation(`/api/resellers/${action.id}`, { method: 'DELETE' }, 'Reseller account deleted')
                   if (action?.type === 'delete-user') runMutation(`/api/users/${action.id}`, { method: 'DELETE' }, 'Subscriber account deleted')
                   if (action?.type === 'delete-content') runMutation(`/api/content/${action.id}`, { method: 'DELETE' }, 'Content item deleted')
@@ -352,6 +369,7 @@ function App() {
                   if (typeof action === 'string') setModal(action)
                   if (action?.type === 'settings') runMutation('/api/settings', jsonOptions('PATCH', action.form), 'Settings saved')
                   if (action?.type === 'support') runMutation('/api/support', jsonOptions('POST', action.form), 'Support request submitted')
+                  if (action?.type === 'integration') runMutation(`/api/integrations/${action.id}`, jsonOptions('PATCH', { status: action.status }), 'Integration status updated')
                   if (action?.type === 'delete-reseller') runMutation(`/api/resellers/${action.id}`, { method: 'DELETE' }, 'Reseller account deleted')
                   if (action?.type === 'delete-user') runMutation(`/api/users/${action.id}`, { method: 'DELETE' }, 'Subscriber account deleted')
                   if (action?.type === 'delete-content') runMutation(`/api/content/${action.id}`, { method: 'DELETE' }, 'Content item deleted')
@@ -538,9 +556,9 @@ function OperationalPage({ page, meta, data, onAction, navigate, showToast }) {
   const isMovies = page === 'movies'
   const isSeries = page === 'series'
   const isMonitoring = page === 'monitoring'
-  const filteredContent = isMovies ? data.content.filter((item) => item.contentType === 'movie') : isSeries ? data.content.filter((item) => item.contentType === 'series') : data.content.filter((item) => item.contentType === 'live_tv')
   const resellers = data.resellers || []
   const content = data.content || []
+  const filteredContent = isMovies ? content.filter((item) => item.contentType === 'movie') : isSeries ? content.filter((item) => item.contentType === 'series') : content.filter((item) => item.contentType === 'live_tv')
   const isCategory = page === 'categories'
   const isEpg = page === 'epg'
   const isServer = page === 'servers'
@@ -553,7 +571,7 @@ function OperationalPage({ page, meta, data, onAction, navigate, showToast }) {
   return (
     <div className="operational-page">
       <div className="page-heading-row"><div><div className="eyebrow"><span className="eyebrow-line" />{meta.eyebrow.toUpperCase()}</div><h1>{meta.title}</h1><p className="page-description">{meta.description}</p></div>{actionLabel && <button className="primary-button" onClick={() => onAction(resolvedActionType)}><Plus size={16} />{actionLabel}</button>}</div>
-      {isMonitoring ? <MonitoringView onExport={() => showToast('Monitoring report exported')} /> : isServer ? <ServersView servers={data.servers} onAdd={() => onAction('server')} onDelete={(id) => onAction({ type: 'delete-server', id })} /> : page === 'analytics' ? <AnalyticsView summary={data.summary} /> : page === 'integrations' ? <IntegrationsView showToast={showToast} /> : page === 'settings' ? <SettingsView settings={data.settings} onSave={(form) => onAction({ type: 'settings', form })} /> : page === 'support' ? <SupportView onSubmit={(form) => onAction({ type: 'support', form })} /> : page === 'billing' ? <BillingView /> : page === 'users' ? <UsersView users={data.users} packages={data.packages} groups={data.groups} onAction={() => onAction('user')} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : isResellers && hasItems ? <ResellerTable resellers={resellers} onDelete={(id) => onAction({ type: 'delete-reseller', id })} /> : (isLiveTv || isMovies || isSeries) && hasItems ? <ContentTable content={filteredContent} onDelete={(id) => onAction({ type: 'delete-content', id })} /> : isCredits ? <CreditsView credits={data.summary.availableCredits || 0} transactions={data.transactions} resellers={resellers} onAction={() => onAction('credits')} /> : page === 'user-groups' ? <ManagedList title="User groups" items={data.groups} emptyTitle="No user groups created" emptyDescription="Create a group to organize access and simplify subscriber management." action={() => onAction('group')} actionLabel="Add group" /> : page === 'packages' ? <ManagedList title="Subscriber packages" items={data.packages} emptyTitle="No packages created" emptyDescription="Create a package to start assigning plans to subscribers." action={() => onAction('package')} actionLabel="Add package" /> : isCategory ? <ManagedList title="Content categories" items={data.categories} emptyTitle="No categories created" emptyDescription="Create categories to keep your catalog organized." action={() => onAction('category')} actionLabel="Add category" valueKey="contentCount" onDelete={(id) => onAction({ type: 'delete-category', id })} /> : isSource ? <ManagedList title="Stream sources" items={data.sources} emptyTitle="No stream sources configured" emptyDescription="Connect a source to start delivering content." action={() => onAction('source')} actionLabel="Add source" valueKey="url" onDelete={(id) => onAction({ type: 'delete-source', id })} /> : isEpg ? <EpgList items={data.epg} onDelete={(id) => onAction({ type: 'delete-epg', id })} /> : page === 'user-activity' ? <ActivityPage items={data.activity} /> : emptyPages.includes(page) || (!hasItems && (isResellers || isLiveTv || isMovies || isSeries)) ? <EmptyWorkspace page={page} actionType={actionType} onAction={onAction} /> : <GenericWorkspace page={page} navigate={navigate} />}
+      {isMonitoring ? <MonitoringView activity={data.activity} summary={data.summary} onExport={() => showToast('Monitoring report exported')} /> : isServer ? <ServersView servers={data.servers} onAdd={() => onAction('server')} onDelete={(id) => onAction({ type: 'delete-server', id })} /> : page === 'analytics' ? <AnalyticsView summary={data.summary} users={data.users} content={data.content} /> : page === 'integrations' ? <IntegrationsView integrations={data.integrations} onToggle={(id, status) => onAction({ type: 'integration', id, status })} /> : page === 'settings' ? <SettingsView settings={data.settings} onSave={(form) => onAction({ type: 'settings', form })} /> : page === 'support' ? <SupportView onSubmit={(form) => onAction({ type: 'support', form })} /> : page === 'billing' ? <BillingView invoices={data.invoices} /> : page === 'users' ? <UsersView users={data.users} packages={data.packages} groups={data.groups} onAction={() => onAction('user')} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : page === 'expiring' ? <ExpiringUsersView users={data.users} onDelete={(id) => onAction({ type: 'delete-user', id })} /> : isResellers && hasItems ? <ResellerTable resellers={resellers} onDelete={(id) => onAction({ type: 'delete-reseller', id })} /> : (isLiveTv || isMovies || isSeries) && hasItems ? <ContentTable content={filteredContent} onDelete={(id) => onAction({ type: 'delete-content', id })} /> : isCredits ? <CreditsView credits={data.summary.availableCredits || 0} transactions={data.transactions} resellers={resellers} onAction={() => onAction('credits')} /> : page === 'transactions' ? <TransactionList transactions={data.transactions} /> : page === 'commissions' ? <CommissionView transactions={data.transactions} /> : page === 'reseller-activity' ? <ActivityPage items={data.activity.filter((item) => item.entityType === 'reseller' || item.eventType.startsWith('reseller.'))} /> : page === 'streams' ? <StreamsView summary={data.summary} servers={data.servers} sources={data.sources} /> : page === 'stream-logs' ? <ActivityPage items={data.activity.filter((item) => item.entityType === 'source' || item.entityType === 'server' || item.eventType.includes('stream') || item.eventType.includes('source'))} /> : page === 'user-groups' ? <ManagedList title="User groups" items={data.groups} emptyTitle="No user groups created" emptyDescription="Create a group to organize access and simplify subscriber management." action={() => onAction('group')} actionLabel="Add group" /> : page === 'packages' ? <ManagedList title="Subscriber packages" items={data.packages} emptyTitle="No packages created" emptyDescription="Create a package to start assigning plans to subscribers." action={() => onAction('package')} actionLabel="Add package" /> : isCategory ? <ManagedList title="Content categories" items={data.categories} emptyTitle="No categories created" emptyDescription="Create categories to keep your catalog organized." action={() => onAction('category')} actionLabel="Add category" valueKey="contentCount" onDelete={(id) => onAction({ type: 'delete-category', id })} /> : isSource ? <ManagedList title="Stream sources" items={data.sources} emptyTitle="No stream sources configured" emptyDescription="Connect a source to start delivering content." action={() => onAction('source')} actionLabel="Add source" valueKey="url" onDelete={(id) => onAction({ type: 'delete-source', id })} /> : isEpg ? <EpgList items={data.epg} onDelete={(id) => onAction({ type: 'delete-epg', id })} /> : page === 'user-activity' ? <ActivityPage items={data.activity} /> : emptyPages.includes(page) || (!hasItems && (isResellers || isLiveTv || isMovies || isSeries)) ? <EmptyWorkspace page={page} actionType={actionType} onAction={onAction} /> : <GenericWorkspace page={page} navigate={navigate} />}
     </div>
   )
 }
@@ -598,6 +616,26 @@ function CreditsView({ credits, transactions, onAction }) {
   return <><div className="credit-summary-grid"><div className="credit-balance"><div><span className="section-kicker">AVAILABLE BALANCE</span><strong>{Number(credits).toLocaleString()}</strong><small>credits ready to allocate</small></div><div className="credit-symbol"><WalletCards size={23} /></div></div><div className="mini-stat"><span>Issued this month</span><strong>{transactions.filter((item) => item.direction === 'issued').reduce((sum, item) => sum + Number(item.amount), 0)}</strong><small>From the credit ledger</small></div><div className="mini-stat"><span>Transferred</span><strong>{transactions.filter((item) => item.direction === 'transferred').reduce((sum, item) => sum + Number(item.amount), 0)}</strong><small>Across reseller accounts</small></div></div>{transactions.length ? <div className="data-panel credit-ledger"><div className="toolbar"><div><span className="section-kicker">AUDITABLE LEDGER</span><h2>Credit activity</h2></div><button className="outline-button" onClick={() => downloadCsv('credit-ledger.csv', transactions)}><Download size={14} />Export</button></div><div className="table-wrap"><table><thead><tr><th>Reseller</th><th>Direction</th><th>Amount</th><th>Description</th><th>Date</th></tr></thead><tbody>{transactions.map((item) => <tr key={item.id}><td>{item.resellerName || 'Master balance'}</td><td><span className={`direction-badge ${item.direction}`}>{item.direction}</span></td><td>{item.amount}</td><td>{item.description}</td><td>{formatDate(item.createdAt)}</td></tr>)}</tbody></table></div></div> : <div className="empty-workspace credit-empty"><EmptyState icon={WalletCards} title="No credit activity" description="Credits will be recorded once they are issued or transferred." action={{ label: 'Transfer credits', onClick: onAction }} /></div>}</>
 }
 
+function TransactionList({ transactions }) {
+  return <div className="data-panel"><div className="toolbar"><div><span className="section-kicker">RESELLER LEDGER</span><h2>Transactions</h2></div><button className="outline-button" onClick={() => downloadCsv('transactions.csv', transactions)}><Download size={14} />Export</button></div>{transactions.length ? <div className="table-wrap"><table><thead><tr><th>Reseller</th><th>Direction</th><th>Amount</th><th>Description</th><th>Created</th></tr></thead><tbody>{transactions.map((item) => <tr key={item.id}><td>{item.resellerName || 'Master balance'}</td><td><span className={`direction-badge ${item.direction}`}>{item.direction}</span></td><td>{item.amount}</td><td>{item.description}</td><td>{formatDate(item.createdAt)}</td></tr>)}</tbody></table></div> : <EmptyState icon={ArrowDownToLine} title="No transactions yet" description="Credit movements will appear here after an issue or transfer." />}</div>
+}
+
+function CommissionView({ transactions }) {
+  const transferred = transactions.filter((item) => item.direction === 'transferred')
+  const total = transferred.reduce((sum, item) => sum + Number(item.amount || 0), 0)
+  return <div className="commission-layout"><div className="credit-summary-grid"><div className="credit-balance"><div><span className="section-kicker">TRACKED VOLUME</span><strong>{total.toLocaleString()}</strong><small>credits transferred to partners</small></div><div className="credit-symbol"><Boxes size={23} /></div></div><div className="mini-stat"><span>Partner events</span><strong>{transferred.length}</strong><small>Recorded in the ledger</small></div></div><TransactionList transactions={transferred} /></div>
+}
+
+function ExpiringUsersView({ users, onDelete }) {
+  const horizon = Date.now() + 30 * 24 * 60 * 60 * 1000
+  const expiring = users.filter((item) => item.expiresAt && new Date(item.expiresAt).getTime() <= horizon && new Date(item.expiresAt).getTime() >= Date.now())
+  return <div className="data-panel"><div className="toolbar"><div><span className="section-kicker">ACCESS HEALTH</span><h2>Expiring within 30 days</h2></div><span className="muted-label">{expiring.length} subscribers</span></div>{expiring.length ? <div className="table-wrap"><table><thead><tr><th>Subscriber</th><th>Package</th><th>Expires</th><th>Status</th><th /></tr></thead><tbody>{expiring.map((user) => <tr key={user.id}><td><div className="table-identity"><span className="table-avatar">{user.name.slice(0, 2).toUpperCase()}</span><div><strong>{user.name}</strong><small>@{user.username}</small></div></div></td><td>{user.packageName || 'Unassigned'}</td><td>{formatDate(user.expiresAt)}</td><td><span className="status-badge status-warning"><i />Renew soon</span></td><td><button className="table-more danger-action" onClick={() => onDelete(user.id)} aria-label={`Delete ${user.name}`}><X size={15} /></button></td></tr>)}</tbody></table></div> : <EmptyState icon={CalendarDays} title="No users expiring soon" description="Subscribers entering their renewal window will appear here." />}</div>
+}
+
+function StreamsView({ summary, servers, sources }) {
+  return <div className="streams-layout"><div className="credit-summary-grid"><div className="credit-balance"><div><span className="section-kicker">ACTIVE STREAMS</span><strong>0</strong><small>no playback sessions active</small></div><div className="credit-symbol"><Radio size={23} /></div></div><div className="mini-stat"><span>Operational servers</span><strong>{summary.operationalServers || 0}</strong><small>Ready for delivery</small></div><div className="mini-stat"><span>Configured sources</span><strong>{sources.length}</strong><small>Upstream connections</small></div></div><div className="data-panel"><div className="toolbar"><div><span className="section-kicker">DELIVERY CAPACITY</span><h2>Stream capacity</h2></div></div><div className="stream-capacity-list">{servers.map((server) => <div className="stream-capacity-row" key={server.id}><span className="server-icon"><Server size={16} /></span><div><strong>{server.name}</strong><small>{server.host}</small></div><span>{server.capacity}% capacity</span><div className="progress"><i style={{ width: `${server.capacity}%` }} /></div></div>)}</div></div></div>
+}
+
 function MonitoringView({ onExport }) {
   return <><div className="monitor-toolbar"><div><CalendarDays size={15} />All time <span>— no activity recorded</span></div><div><button className="outline-button"><SlidersHorizontal size={14} />Date range</button><button className="primary-button small-button" onClick={onExport}><Download size={14} />Export</button></div></div><div className="monitor-grid"><div className="chart-panel panel"><span className="section-kicker">STREAM MONITORING SIGNAL</span><div className="chart-area"><div className="chart-grid-lines" /><div className="chart-labels">{['01','02','03','04','05','06','07','08','09','10','11','12'].map((label) => <span key={label}>{label}</span>)}</div></div></div><div className="panel summary-panel"><span className="section-kicker">SUMMARY</span><div className="summary-list"><div><span>Observed events</span><strong>0</strong></div><div><span>Reportable periods</span><strong>0</strong></div><div><span>Data completeness</span><strong>0%</strong></div><div><span>Last refresh</span><strong>Not yet</strong></div></div></div></div></>
 }
@@ -610,8 +648,9 @@ function AnalyticsView() {
   return <div className="analytics-layout"><div className="panel analytics-main"><div className="panel-heading"><div><span className="section-kicker">AUDIENCE OVERVIEW</span><h2>Subscriber growth</h2></div><button className="filter-button">Last 30 days <ChevronDown size={13} /></button></div><div className="analytics-empty"><div className="bar-placeholder"><i /><i /><i /><i /><i /><i /><i /></div><p>Analytics will populate as your network receives traffic.</p></div></div><div className="panel insight-card"><div className="metric-icon cyan"><Zap size={18} /></div><span className="section-kicker">INSIGHT</span><h3>Build your first audience</h3><p>Add subscribers and content to unlock network insights.</p></div></div>
 }
 
-function IntegrationsView({ showToast }) {
-  return <div className="integrations-grid"><IntegrationCard icon={Cable} name="XTREAM API" description="Connect your panel to external applications." status="Ready to configure" onClick={() => showToast('XTREAM API setup opened')} /><IntegrationCard icon={FileCode2} name="Webhooks" description="Send platform events to your own systems." status="Not configured" onClick={() => showToast('Webhook configuration opened')} /><IntegrationCard icon={Database} name="Data export" description="Move your operational data securely." status="Available" onClick={() => showToast('Export center opened')} /></div>
+function IntegrationsView({ integrations, onToggle }) {
+  const icons = { 'xtream-api': Cable, webhooks: FileCode2, 'data-export': Database }
+  return <div className="integrations-grid">{integrations.map((item) => <IntegrationCard key={item.id} icon={icons[item.slug] || Cable} name={item.name} description={item.description} status={item.status} onClick={() => onToggle(item.id, item.status === 'configured' ? 'available' : 'configured')} />)}</div>
 }
 
 function IntegrationCard({ icon: Icon, name, description, status, onClick }) {
@@ -631,8 +670,8 @@ function SupportView({ onSubmit }) {
   return <div className="support-layout"><div className="panel support-hero"><span className="support-icon"><CircleHelp size={24} /></span><span className="section-kicker">OPERATOR SUPPORT</span><h2>How can we help?</h2><p>Browse the operational guide or reach out to the XTREAM CABLE team.</p><div className="support-form"><input placeholder="Subject" value={form.subject} onChange={(event) => setForm({ ...form, subject: event.target.value })} /><textarea placeholder="Describe what you need help with" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} /><button className="primary-button" onClick={() => onSubmit(form)}>Submit support request <ArrowRight size={15} /></button></div></div><div className="support-topics">{['Getting started', 'Managing subscribers', 'Content onboarding', 'Stream delivery'].map((topic) => <button key={topic}><span>{topic}</span><ArrowRight size={14} /></button>)}</div></div>
 }
 
-function BillingView() {
-  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">CURRENT PLAN</span><h2>Master Console</h2><p>Your operational workspace is ready for configuration.</p><div className="plan-details"><span><Check size={14} />Unlimited operations</span><span><Check size={14} />Stream monitoring</span><span><Check size={14} />Reseller management</span></div><button className="outline-button">View plan details <ArrowRight size={14} /></button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div></div><EmptyState compact icon={CreditCard} title="No invoices yet" description="Your billing history will appear here." /></div></div>
+function BillingView({ invoices }) {
+  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">CURRENT PLAN</span><h2>Master Console</h2><p>Your operational workspace is ready for configuration.</p><div className="plan-details"><span><Check size={14} />Unlimited operations</span><span><Check size={14} />Stream monitoring</span><span><Check size={14} />Reseller management</span></div><button className="outline-button" onClick={() => downloadCsv('billing-invoices.csv', invoices)}>Export invoices <Download size={14} /></button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div></div>{invoices.length ? <div className="invoice-list">{invoices.map((invoice) => <div className="invoice-row" key={invoice.id}><div><strong>{invoice.invoiceNumber}</strong><small>{invoice.periodLabel} · {formatDate(invoice.issuedAt)}</small></div><span>${Number(invoice.amount).toFixed(2)}</span><span className="status-badge"><i />{invoice.status}</span></div>)}</div> : <EmptyState compact icon={CreditCard} title="No invoices yet" description="Your billing history will appear here." />}</div></div>
 }
 
 function UsersView({ users, onAction, onDelete }) {
@@ -672,7 +711,15 @@ function BackendModal({ type, resellers, packages, groups, onClose, onSubmit }) 
           ? { name: '', description: '' }
           : type === 'package'
             ? { name: '', description: '', durationDays: '30', price: '0' }
-            : { amount: '', resellerId: '' }
+            : type === 'server'
+              ? { name: '', host: '', capacity: '100' }
+              : type === 'source'
+                ? { name: '', url: '' }
+                : type === 'category'
+                  ? { name: '', description: '' }
+                  : type === 'epg'
+                    ? { channelName: '', programName: '', startsAt: '', endsAt: '' }
+                    : { amount: '', resellerId: '' }
   const [form, setForm] = useState(initialForm)
   const [error, setError] = useState('')
   const meta = {
@@ -681,6 +728,10 @@ function BackendModal({ type, resellers, packages, groups, onClose, onSubmit }) 
     user: ['Add subscriber account', 'Create a subscriber with access and expiry settings.'],
     group: ['Add user group', 'Organize subscribers into a reusable access group.'],
     package: ['Add subscriber package', 'Create a plan that can be assigned to subscribers.'],
+    server: ['Add streaming server', 'Connect an origin to expand your delivery network.'],
+    source: ['Add stream source', 'Register an upstream source for content delivery.'],
+    category: ['Add content category', 'Create a reusable catalog category.'],
+    epg: ['Add EPG schedule', 'Add a program to a channel schedule.'],
     credits: ['Transfer credits', 'Allocate credits to a reseller account.'],
   }[type]
   function update(key, value) { setForm((current) => ({ ...current, [key]: value })); setError('') }
@@ -690,6 +741,10 @@ function BackendModal({ type, resellers, packages, groups, onClose, onSubmit }) 
     if ((type === 'group' || type === 'package') && !form.name.trim()) return setError('A name is required.')
     if (type === 'credits' && (!form.resellerId || Number(form.amount) < 1)) return setError('Choose a reseller and enter a valid amount.')
     if ((type === 'reseller' || type === 'content') && !form.name.trim()) return setError(type === 'reseller' ? 'Add a reseller name to continue.' : 'Add a channel name to continue.')
+    if ((type === 'server' || type === 'source' || type === 'category') && !form.name.trim()) return setError('A name is required.')
+    if (type === 'server' && !form.host.trim()) return setError('A host or origin URL is required.')
+    if (type === 'source' && !form.url.trim()) return setError('A source URL is required.')
+    if (type === 'epg' && (!form.channelName.trim() || !form.programName.trim() || !form.startsAt || !form.endsAt)) return setError('Channel, program, and both schedule times are required.')
     onSubmit(type, form)
   }
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="modal-card"><div className="modal-header"><div><span className="section-kicker">MASTER CONSOLE</span><h2>{meta[0]}</h2><p>{meta[1]}</p></div><button className="close-button" onClick={onClose}><X size={17} /></button></div><form onSubmit={submit}>
@@ -698,6 +753,10 @@ function BackendModal({ type, resellers, packages, groups, onClose, onSubmit }) 
     {type === 'user' && <><label>Subscriber name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Ahmed Khan" /></label><div className="form-row"><label>Username<input value={form.username} onChange={(event) => update('username', event.target.value)} placeholder="ahmed_khan" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="subscriber@example.com" /></label></div><div className="form-row"><label>Package<select value={form.packageId} onChange={(event) => update('packageId', event.target.value)}><option value="">No package</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Group<select value={form.groupId} onChange={(event) => update('groupId', event.target.value)}><option value="">No group</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><label>Expires on<input type="date" value={form.expiresAt} onChange={(event) => update('expiresAt', event.target.value)} /></label></>}
     {type === 'group' && <><label>Group name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Premium subscribers" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="What access does this group have?" /></label></>}
     {type === 'package' && <><label>Package name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Gold 30 days" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe the subscriber plan" /></label><div className="form-row"><label>Duration (days)<input type="number" min="1" value={form.durationDays} onChange={(event) => update('durationDays', event.target.value)} /></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => update('price', event.target.value)} /></label></div></>}
+    {type === 'server' && <><label>Server name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Primary origin" /></label><label>Host or origin URL<input value={form.host} onChange={(event) => update('host', event.target.value)} placeholder="origin.example.com" /></label><label>Capacity percentage<input type="number" min="1" max="100" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label></>}
+    {type === 'source' && <><label>Source name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Partner feed" /></label><label>Source URL<input value={form.url} onChange={(event) => update('url', event.target.value)} placeholder="https://source.example.com/live" /></label></>}
+    {type === 'category' && <><label>Category name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Sports" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe this catalog category" /></label></>}
+    {type === 'epg' && <><label>Channel name<input autoFocus value={form.channelName} onChange={(event) => update('channelName', event.target.value)} placeholder="e.g. XTREAM Sports" /></label><label>Program name<input value={form.programName} onChange={(event) => update('programName', event.target.value)} placeholder="e.g. Live match coverage" /></label><div className="form-row"><label>Starts at<input type="datetime-local" value={form.startsAt} onChange={(event) => update('startsAt', event.target.value)} /></label><label>Ends at<input type="datetime-local" value={form.endsAt} onChange={(event) => update('endsAt', event.target.value)} /></label></div></>}
     {type === 'credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Available to transfer</strong><span>Choose a reseller and amount below</span></div></div><label>Destination reseller<select autoFocus value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="" disabled>Select a reseller</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name} · {item.credits} credits</option>)}</select></label><label>Credit amount<input type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label></>}
     {error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button">{type === 'credits' ? 'Transfer credits' : 'Create and continue'}<ArrowRight size={15} /></button></div></form></div></div>
 }

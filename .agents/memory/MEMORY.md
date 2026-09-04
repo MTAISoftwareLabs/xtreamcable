@@ -1,0 +1,1 @@
+- [Console persistence](console-persistence.md) — Keep operator mutations server-side and refresh the authenticated bootstrap after writes so changes remain consistent across devices.
