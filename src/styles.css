@@ -13,6 +13,11 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .brand-lockup { flex: 1; display: flex; align-items: center; gap: 9px; min-width: 0; border: 0; background: transparent; padding: 0; text-align: left; }
 .brand-mark { width: 31px; height: 31px; display: grid; place-items: center; flex: 0 0 auto; color: #091016; background: linear-gradient(135deg, #e6f7f7, #8ba4aa); border-radius: 4px; box-shadow: 0 0 0 1px #e9ffff; }
 .brand-mark.large { width: 46px; height: 46px; border-radius: 7px; color: #071116; }
+.logo-surface { display: grid; place-items: center; flex: 0 0 auto; overflow: hidden; background: #e7f0ef; border: 1px solid #f6ffff; box-shadow: 0 0 0 1px #c7d5d6; }
+.logo-surface img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.sidebar-logo-surface { width: 113px; height: 39px; padding: 2px 4px; border-radius: 3px; }
+.sidebar-console-label { color: #6b7b8c; font-family: var(--mono); font-size: 6px; line-height: 1.45; letter-spacing: .9px; white-space: nowrap; }
+.loading-logo-surface { width: 150px; height: 53px; padding: 3px 7px; border-radius: 5px; }
 .brand-copy { display: flex; flex-direction: column; min-width: 0; }
 .brand-copy strong, .login-brand strong { font-size: 11px; font-weight: 800; letter-spacing: -.2px; white-space: nowrap; }
 .brand-copy strong span, .login-brand strong span { color: var(--cyan); }
@@ -69,6 +74,7 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .notification-button i { position: absolute; top: 7px; right: 8px; width: 5px; height: 5px; border: 1px solid #0c1221; border-radius: 50%; background: var(--cyan); }
 .profile-button { gap: 7px; padding: 2px; color: #728196; }
 .mobile-header { display: none; }
+.mobile-logo-surface { width: 91px; height: 31px; padding: 2px 4px; border-radius: 3px; }
 .popover-wrap { position: relative; }
 .popover { position: absolute; z-index: 30; top: calc(100% + 12px); right: 0; width: 270px; border: 1px solid #26364a; border-radius: 10px; background: #101824; box-shadow: 0 16px 50px #0008; }
 .popover-heading { display: flex; align-items: center; justify-content: space-between; padding: 14px; border-bottom: 1px solid var(--border); }
@@ -294,6 +300,8 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
 .login-glow-one { top: -260px; left: -180px; width: 650px; height: 650px; background: radial-gradient(circle, #16475255, transparent 66%); }
 .login-glow-two { right: -230px; bottom: -330px; width: 700px; height: 700px; background: radial-gradient(circle, #1c2c6350, transparent 67%); }
 .login-brand { position: absolute; top: 42px; left: 48px; display: flex; align-items: center; gap: 12px; }
+.login-logo-surface { width: 180px; height: 63px; padding: 4px 7px; border-radius: 5px; }
+.login-brand > small { color: #65768a; font-family: var(--mono); font-size: 7px; letter-spacing: 1.8px; }
 .login-brand strong { display: block; font-size: 14px; letter-spacing: -.3px; }.login-brand small { display: block; font-size: 7px; letter-spacing: 1.8px; }
 .login-card { position: relative; z-index: 1; width: min(406px, calc(100% - 38px)); padding: 31px 32px 23px; border: 1px solid #263747; border-radius: 12px; background: #0d151fdd; box-shadow: 0 25px 90px #0007, inset 0 1px #ffffff05; }
 .login-card-top { display: flex; align-items: center; gap: 7px; color: #72a8b2; font-family: var(--mono); font-size: 8px; letter-spacing: 1px; }
@@ -323,7 +331,7 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
   .sidebar-collapsed .nav-group-title { justify-content: space-between; padding: 0 9px; }.sidebar-collapsed .nav-item { justify-content: flex-start; padding: 7px 10px; }.sidebar-collapsed .collapse-button { display: grid; }
   .main-shell, .main-shell-collapsed { margin-left: 0; }
   .mobile-overlay { position: fixed; z-index: 19; inset: 0; border: 0; background: #0008; }
-  .mobile-header { display: flex; align-items: center; gap: 10px; color: #c5d5d9; font-size: 11px; font-weight: 700; }.mobile-header b { color: var(--cyan); }.mobile-header button { display: grid; padding: 3px; border: 0; color: var(--cyan); background: transparent; }
+  .mobile-header { display: flex; align-items: center; gap: 10px; color: #c5d5d9; font-size: 11px; font-weight: 700; }.mobile-header button { display: grid; padding: 3px; border: 0; color: var(--cyan); background: transparent; }
   .breadcrumbs { display: none; }.topbar { padding: 0 15px; }.topbar-actions { margin-left: auto; }.command-search { width: min(210px, 33vw); }.command-search:focus-within, .command-search.has-results { width: min(260px, 43vw); }
   .page-content { padding: 28px 18px 45px; }.global-search-results { right: 80px; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }.dashboard-grid { grid-template-columns: 1fr; }
@@ -332,7 +340,7 @@ td { padding: 14px 16px; border-top: 1px solid #1a2531; color: #97a6b4; font-siz
   .topbar { height: 56px; }.page-scroll { min-height: calc(100vh - 56px); }.page-content { padding: 23px 13px 35px; }
   .topbar-divider, .profile-button > svg, .command-search kbd { display: none; }.command-search { width: 33px; padding: 0 8px; border-color: transparent; background: transparent; }.command-search input { display: none; }.command-search:focus-within, .command-search.has-results { width: 185px; padding: 0 9px; border-color: #304357; background: #0c1221; }.command-search:focus-within input, .command-search.has-results input { display: block; }
   .global-search-results { top: 48px; right: 51px; width: 190px; }.notification-popover { right: -35px; width: 250px; }
-  .login-brand { top: 25px; left: 23px; }.login-card { padding: 26px 22px 20px; }.login-footer { right: 23px; bottom: 20px; left: 23px; font-size: 7px; }.login-footer span:last-child { display: none; }
+  .login-brand { top: 25px; left: 23px; }.login-logo-surface { width: 137px; height: 48px; }.login-brand > small { display: none; }.login-card { padding: 26px 22px 20px; }.login-footer { right: 23px; bottom: 20px; left: 23px; font-size: 7px; }.login-footer span:last-child { display: none; }
   .hero-row, .page-heading-row { align-items: flex-start; flex-direction: column; }.date-chip { display: none; }.operational-page .page-heading-row .primary-button { align-self: stretch; }
   h1 { font-size: 28px; }.operational-page h1 { font-size: 25px; }.page-description { font-size: 10px; }
   .metric-grid { gap: 7px; margin-top: 24px; }.metric-card { min-height: 89px; gap: 9px; padding: 12px; }.metric-icon { width: 30px; height: 30px; }.metric-content strong { font-size: 20px; }.metric-content span { font-size: 8px; }.metric-content small { font-size: 6px; }

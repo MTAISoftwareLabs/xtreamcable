@@ -56,6 +56,7 @@ import {
 import './styles.css'
 
 const accent = '#28d8f2'
+const logoPath = '/attached_assets/logo_1788516695953.png'
 
 const navGroups = [
   { label: 'Workspace', items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
@@ -305,7 +306,7 @@ function App() {
 }
 
 function AuthLoadingScreen() {
-  return <div className="auth-loading"><div className="brand-mark large"><Cable size={27} strokeWidth={2.7} /></div><span>Securing operator session…</span></div>
+  return <div className="auth-loading"><div className="logo-surface loading-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div><span>Securing operator session…</span></div>
 }
 
 function readStorage(key, fallback) {
@@ -335,8 +336,8 @@ function LoginScreen({ onLogin }) {
       <div className="login-glow login-glow-two" />
       <div className="login-grid" />
       <div className="login-brand">
-        <div className="brand-mark large"><Cable size={27} strokeWidth={2.7} /></div>
-        <div><strong>XTREAM <span>CABLE</span></strong><small>MASTER CONSOLE</small></div>
+        <div className="logo-surface login-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div>
+        <small>MASTER CONSOLE</small>
       </div>
       <div className="login-card">
         <div className="login-card-top"><span className="status-dot" />SECURE OPERATOR ACCESS</div>
@@ -374,8 +375,8 @@ function Sidebar({ activePage, openGroups, setOpenGroups, navigate, collapsed, s
       <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
         <div className="sidebar-header">
           <button className="brand-lockup" onClick={() => navigate('dashboard')} aria-label="Go to dashboard">
-            <div className="brand-mark"><Cable size={18} strokeWidth={2.8} /></div>
-            {!collapsed && <div className="brand-copy"><strong>XTREAM <span>CABLE</span></strong><small>MASTER CONSOLE</small></div>}
+            <div className="logo-surface sidebar-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div>
+            {!collapsed && <span className="sidebar-console-label">MASTER<br />CONSOLE</span>}
           </button>
           <button className="collapse-button" onClick={() => setCollapsed((value) => !value)}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
         </div>
@@ -402,7 +403,7 @@ function NavItem({ item, active, collapsed, onClick }) {
 function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, onLogout, onMenu }) {
   return (
     <header className="topbar">
-      <div className="mobile-header"><button onClick={onMenu}><Menu size={21} /></button><span>XTREAM <b>CABLE</b></span></div>
+      <div className="mobile-header"><button onClick={onMenu}><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div></div>
       <div className="breadcrumbs"><span>MASTER CONSOLE</span><ChevronRight size={12} /><strong>{current.eyebrow.toUpperCase()}</strong><b>{current.title}</b></div>
       <div className="topbar-actions">
         <div className={`command-search ${searchMatches.length ? 'has-results' : ''}`}><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search command" /><kbd>⌘ K</kbd>{search && <button onClick={() => setSearch('')}><X size={13} /></button>}</div>
