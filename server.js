@@ -61,6 +61,8 @@ async function withTransaction(work) {
   }
 }
 
+await pool.query('ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS reseller_id INTEGER REFERENCES resellers(id) ON DELETE SET NULL')
+
 app.get('/api/session', (req, res) => {
   res.json({ authenticated: Boolean(req.session.user), user: req.session.user || null })
 })
@@ -85,9 +87,9 @@ app.get('/api/health', requireAuth, asyncRoute(async (req, res) => {
 }))
 
 app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
-  const [settings, users, groups, packages, resellers, content, servers, sources, categories, epg, transactions, activity, integrations, invoices] = await Promise.all([
+  const [settings, users, groups, packages, resellers, content, servers, sources, categories, epg, transactions, activity, integrations, invoices, supportRequests] = await Promise.all([
     pool.query('SELECT id, console_name AS "consoleName", timezone, operational_alerts AS "operationalAlerts", session_timeout_minutes AS "sessionTimeoutMinutes", email_notifications AS "emailNotifications", incident_alerts AS "incidentAlerts" FROM console_settings WHERE id = 1'),
-    pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt", s.package_id AS "packageId", s.group_id AS "groupId", s.created_at AS "createdAt",
+    pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt", s.package_id AS "packageId", s.group_id AS "groupId", s.reseller_id AS "resellerId", s.created_at AS "createdAt",
       p.name AS "packageName", g.name AS "groupName"
       FROM subscribers s LEFT JOIN packages p ON p.id = s.package_id LEFT JOIN user_groups g ON g.id = s.group_id
       ORDER BY s.created_at DESC`),
@@ -95,8 +97,10 @@ app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
       FROM user_groups g LEFT JOIN subscribers s ON s.group_id = g.id GROUP BY g.id ORDER BY g.created_at DESC`),
     pool.query(`SELECT id, name, description, duration_days AS "durationDays", price, status, created_at AS "createdAt"
       FROM packages ORDER BY created_at DESC`),
-    pool.query(`SELECT id, name, email, capacity, credits, status, created_at AS "createdAt"
-      FROM resellers ORDER BY created_at DESC`),
+    pool.query(`SELECT r.id, r.name, r.email, r.capacity, r.credits, r.status, r.created_at AS "createdAt",
+      COUNT(s.id)::int AS "userCount"
+      FROM resellers r LEFT JOIN subscribers s ON s.reseller_id = r.id
+      GROUP BY r.id ORDER BY r.created_at DESC`),
     pool.query(`SELECT id, name, content_type AS "contentType", category, country, source, status, created_at AS "createdAt"
       FROM content_items ORDER BY created_at DESC`),
     pool.query(`SELECT id, name, host, status, capacity, created_at AS "createdAt"
@@ -115,23 +119,37 @@ app.get('/api/bootstrap', requireAuth, asyncRoute(async (req, res) => {
       FROM console_integrations ORDER BY id ASC`),
     pool.query(`SELECT id, invoice_number AS "invoiceNumber", period_label AS "periodLabel", amount, status, issued_at AS "issuedAt"
       FROM billing_invoices ORDER BY issued_at DESC`),
+    pool.query(`SELECT id, subject, message, status, created_at AS "createdAt"
+      FROM support_requests ORDER BY created_at DESC LIMIT 10`),
   ])
-  const [summary, balance] = await Promise.all([
+  const [summary, balance, activityTrend] = await Promise.all([
     pool.query(`SELECT
       (SELECT COUNT(*)::int FROM subscribers WHERE status = 'active') AS "activeSubscribers",
       (SELECT COUNT(*)::int FROM content_items WHERE content_type = 'live_tv' AND status = 'active') AS "liveChannels",
       (SELECT COUNT(*)::int FROM resellers WHERE status = 'active') AS "resellerAccounts",
-      (SELECT COUNT(*)::int FROM servers WHERE status = 'operational') AS "operationalServers"`),
+      (SELECT COUNT(*)::int FROM servers WHERE status = 'operational') AS "operationalServers",
+      (SELECT COUNT(*)::int FROM servers) AS "totalServers",
+      (SELECT COUNT(*)::int FROM stream_sources WHERE status = 'active') AS "activeSources"`),
     pool.query(`SELECT COALESCE(SUM(CASE WHEN direction = 'issued' THEN amount ELSE 0 END), 0)::int -
       COALESCE(SUM(CASE WHEN direction IN ('transferred','used') THEN amount ELSE 0 END), 0)::int AS balance
       FROM credit_transactions`),
+    pool.query(`SELECT TO_CHAR(day, 'YYYY-MM-DD') AS date, COUNT(activity_logs.id)::int AS total,
+      COUNT(activity_logs.id) FILTER (WHERE entity_type IN ('source', 'server') OR event_type ILIKE '%stream%')::int AS "streamEvents"
+      FROM generate_series(CURRENT_DATE - INTERVAL '6 days', CURRENT_DATE, INTERVAL '1 day') AS day
+      LEFT JOIN activity_logs ON activity_logs.created_at::date = day::date
+      GROUP BY day ORDER BY day ASC`),
   ])
   res.json({
     settings: settings.rows[0] || { id: 1, consoleName: 'XTREAM CABLE', timezone: 'Asia/Karachi', operationalAlerts: true, sessionTimeoutMinutes: 720, emailNotifications: true, incidentAlerts: true },
     users: users.rows, groups: groups.rows, packages: packages.rows, resellers: resellers.rows,
     content: content.rows, servers: servers.rows, sources: sources.rows, categories: categories.rows, epg: epg.rows, transactions: transactions.rows,
-    activity: activity.rows, integrations: integrations.rows, invoices: invoices.rows,
-    summary: { ...summary.rows[0], availableCredits: balance.rows[0].balance },
+    activity: activity.rows, integrations: integrations.rows, invoices: invoices.rows, supportRequests: supportRequests.rows,
+    activityTrend: activityTrend.rows,
+    summary: {
+      ...summary.rows[0],
+      healthPercent: summary.rows[0].totalServers ? Math.round((summary.rows[0].operationalServers / summary.rows[0].totalServers) * 100) : 0,
+      availableCredits: balance.rows[0].balance,
+    },
   })
 }))
 
@@ -171,7 +189,7 @@ app.get('/api/activity', requireAuth, asyncRoute(async (req, res) => {
 
 app.get('/api/users', requireAuth, asyncRoute(async (req, res) => {
   const q = text(req.query.q)
-  const result = await pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt",
+  const result = await pool.query(`SELECT s.id, s.name, s.username, s.email, s.status, s.expires_at AS "expiresAt", s.reseller_id AS "resellerId",
     p.name AS "packageName", g.name AS "groupName", s.created_at AS "createdAt"
     FROM subscribers s LEFT JOIN packages p ON p.id = s.package_id LEFT JOIN user_groups g ON g.id = s.group_id
     WHERE ($1 = '' OR s.name ILIKE '%' || $1 || '%' OR s.username ILIKE '%' || $1 || '%' OR s.email ILIKE '%' || $1 || '%')
@@ -185,10 +203,10 @@ app.post('/api/users', requireAuth, asyncRoute(async (req, res) => {
   const email = text(req.body?.email)
   if (!name || !username) return res.status(400).json({ message: 'Name and username are required.' })
   const result = await withTransaction(async (client) => {
-    const inserted = await client.query(`INSERT INTO subscribers (name, username, email, status, expires_at, package_id, group_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, name, username, email, status, expires_at AS "expiresAt", created_at AS "createdAt"`,
-    [name, username, email, ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : 'active', dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null])
+    const inserted = await client.query(`INSERT INTO subscribers (name, username, email, status, expires_at, package_id, group_id, reseller_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, name, username, email, status, expires_at AS "expiresAt", reseller_id AS "resellerId", created_at AS "createdAt"`,
+    [name, username, email, ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : 'active', dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null, positiveInt(req.body?.resellerId) || null])
     await logActivity(client, 'user.created', `Subscriber ${name} was created.`, 'user', inserted.rows[0].id)
     return inserted.rows[0]
   })
@@ -200,9 +218,9 @@ app.patch('/api/users/:id', requireAuth, asyncRoute(async (req, res) => {
   const username = text(req.body?.username).toLowerCase()
   const result = await pool.query(`UPDATE subscribers SET name = COALESCE(NULLIF($1,''), name),
     username = COALESCE(NULLIF($2,''), username), email = COALESCE($3, email), status = COALESCE($4, status), expires_at = COALESCE($5, expires_at),
-    package_id = COALESCE($6, package_id), group_id = COALESCE($7, group_id)
-    WHERE id = $8 RETURNING id, name, username, email, status, expires_at AS "expiresAt"`,
-  [text(req.body?.name), username, req.body?.email == null ? null : text(req.body.email), ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : null, dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null, id])
+    package_id = COALESCE($6, package_id), group_id = COALESCE($7, group_id), reseller_id = COALESCE($8, reseller_id)
+    WHERE id = $9 RETURNING id, name, username, email, status, expires_at AS "expiresAt", reseller_id AS "resellerId"`,
+  [text(req.body?.name), username, req.body?.email == null ? null : text(req.body.email), ['active', 'paused', 'expired'].includes(req.body?.status) ? req.body.status : null, dateOrNull(req.body?.expiresAt), positiveInt(req.body?.packageId) || null, positiveInt(req.body?.groupId) || null, positiveInt(req.body?.resellerId) || null, id])
   if (!result.rowCount) return res.status(404).json({ message: 'Subscriber not found.' })
   await pool.query('INSERT INTO activity_logs (event_type, message, entity_type, entity_id) VALUES ($1, $2, $3, $4)', ['user.updated', `Subscriber ${result.rows[0].name} was updated.`, 'user', id])
   res.json({ item: result.rows[0] })
