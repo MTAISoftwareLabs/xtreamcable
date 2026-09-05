@@ -709,7 +709,29 @@ function SupportView({ requests = [], onSubmit }) {
 }
 
 function BillingView({ invoices }) {
-  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">CURRENT PLAN</span><h2>Master Console</h2><p>Your operational workspace is ready for configuration.</p><div className="plan-details"><span><Check size={14} />Unlimited operations</span><span><Check size={14} />Stream monitoring</span><span><Check size={14} />Reseller management</span></div><button className="outline-button" onClick={() => downloadCsv('billing-invoices.csv', invoices)}>Export invoices <Download size={14} /></button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div></div>{invoices.length ? <div className="invoice-list">{invoices.map((invoice) => <div className="invoice-row" key={invoice.id}><div><strong>{invoice.invoiceNumber}</strong><small>{invoice.periodLabel} · {formatDate(invoice.issuedAt)}</small></div><span>${Number(invoice.amount).toFixed(2)}</span><span className="status-badge"><i />{invoice.status}</span></div>)}</div> : <EmptyState compact icon={CreditCard} title="No invoices yet" description="Your billing history will appear here." />}</div></div>
+  const [stripe, setStripe] = useState({ connected: false, products: [], invoices: [], loading: true, error: '' })
+  const [checkoutEmail, setCheckoutEmail] = useState('')
+  useEffect(() => {
+    let active = true
+    Promise.all([apiRequest('/api/billing/stripe/status'), apiRequest('/api/billing/stripe/catalog'), apiRequest('/api/billing/stripe/invoices')])
+      .then(([status, catalog, remoteInvoices]) => {
+        if (active) setStripe({ connected: status.connected, products: catalog.products || [], invoices: remoteInvoices.items || [], loading: false, error: '' })
+      })
+      .catch((error) => {
+        if (active) setStripe((current) => ({ ...current, loading: false, error: error.message }))
+      })
+    return () => { active = false }
+  }, [])
+  async function startCheckout(priceId) {
+    try {
+      const result = await apiRequest('/api/billing/stripe/checkout', { method: 'POST', body: JSON.stringify({ priceId, email: checkoutEmail }) })
+      if (result.url) window.location.assign(result.url)
+    } catch (error) {
+      setStripe((current) => ({ ...current, error: error.message }))
+    }
+  }
+  const formatMoney = (amount, currency = 'usd') => `${currency.toUpperCase()} ${(Number(amount || 0) / 100).toFixed(2)}`
+  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">STRIPE BILLING</span><h2>Master Console</h2><p>{stripe.connected ? 'Stripe is connected. Choose a configured price to open hosted Checkout.' : 'Stripe billing is not connected in this environment.'}</p><div className="plan-details"><span><Check size={14} />Hosted Checkout</span><span><Check size={14} />Subscription support</span><span><Check size={14} />Invoice sync</span></div><label className="billing-email">Checkout email<input type="email" value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} placeholder="billing@example.com" /></label><button className="outline-button" onClick={() => downloadCsv('billing-invoices.csv', invoices)}><Download size={14} />Export local invoices</button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">STRIPE CATALOG</span><h2>Available plans</h2></div><span className={`status-badge ${stripe.connected ? '' : 'status-warning'}`}><i />{stripe.connected ? 'Connected' : 'Unavailable'}</span></div>{stripe.error ? <div className="form-error"><AlertCircle size={14} />{stripe.error}</div> : stripe.loading ? <div className="activity-loading"><RefreshCw size={17} />Loading Stripe billing…</div> : stripe.products.length ? <div className="billing-products">{stripe.products.flatMap((product) => product.prices.map((price) => <div className="invoice-row" key={price.id}><div><strong>{product.name}</strong><small>{product.description || 'XTREAM CABLE service plan'} · {price.recurring ? `Every ${price.recurring.interval}` : 'One-time'}</small></div><span>{formatMoney(price.amount, price.currency)}</span><button className="outline-button" onClick={() => startCheckout(price.id)}>Checkout <ArrowRight size={14} /></button></div>))}</div> : <EmptyState compact icon={CreditCard} title={stripe.connected ? 'No Stripe prices configured' : 'Stripe billing unavailable'} description={stripe.connected ? 'Create an active product price in Stripe to enable hosted Checkout.' : 'Connect Stripe to enable hosted Checkout and invoice sync.'} />}</div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div><button className="outline-button" onClick={() => downloadCsv('stripe-invoices.csv', stripe.invoices)}>Export Stripe invoices <Download size={14} /></button></div>{stripe.invoices.length ? <div className="invoice-list">{stripe.invoices.map((invoice) => <div className="invoice-row" key={invoice.id}><div><strong>{invoice.number || invoice.id}</strong><small>{invoice.customerEmail || 'Stripe customer'} · {formatDate(new Date(invoice.createdAt * 1000).toISOString())}</small></div><span>{formatMoney(invoice.amount, invoice.currency)}</span><span className="status-badge"><i />{invoice.status || 'open'}</span>{invoice.hostedUrl && <a className="outline-button" href={invoice.hostedUrl} target="_blank" rel="noreferrer">Open <ArrowRight size={14} /></a>}</div>)}</div> : <EmptyState compact icon={CreditCard} title="No Stripe invoices yet" description="Invoices will appear after the first Stripe payment or subscription." />}</div></div>
 }
 
 function UsersView({ users, resellers, onAction, onEdit, onDelete }) {

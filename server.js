@@ -2,6 +2,7 @@ import express from 'express'
 import session from 'express-session'
 import pg from 'pg'
 import { createServer as createViteServer } from 'vite'
+import { stripeRequest } from './server/stripeClient.js'
 
 const { Pool } = pg
 const app = express()
@@ -9,6 +10,8 @@ const port = 5000
 const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 app.set('trust proxy', 1)
+const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
+
 app.use(express.json({ limit: '1mb' }))
 app.use(session({
   secret: process.env.SESSION_SECRET || 'local-development-session-secret',
@@ -16,8 +19,6 @@ app.use(session({
   saveUninitialized: false,
   cookie: { httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 12 },
 }))
-
-const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next)
 
 function requireAuth(req, res, next) {
   if (!req.session.user) return res.status(401).json({ message: 'Your operator session has expired.' })
@@ -62,6 +63,15 @@ async function withTransaction(work) {
 }
 
 await pool.query('ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS reseller_id INTEGER REFERENCES resellers(id) ON DELETE SET NULL')
+
+let stripeReady = false
+try {
+  await stripeRequest('/v1/products?active=true&limit=1')
+  stripeReady = true
+  console.log('Stripe integration ready')
+} catch (error) {
+  console.error('Stripe integration unavailable:', error.message)
+}
 
 app.get('/api/session', (req, res) => {
   res.json({ authenticated: Boolean(req.session.user), user: req.session.user || null })
@@ -634,6 +644,79 @@ app.get('/api/billing/invoices', requireAuth, asyncRoute(async (req, res) => {
   const result = await pool.query(`SELECT id, invoice_number AS "invoiceNumber", period_label AS "periodLabel", amount, status, issued_at AS "issuedAt"
     FROM billing_invoices ORDER BY issued_at DESC`)
   res.json({ items: result.rows })
+}))
+
+app.get('/api/billing/stripe/status', requireAuth, (req, res) => {
+  res.json({ connected: stripeReady, provider: 'stripe' })
+})
+
+app.get('/api/billing/stripe/catalog', requireAuth, asyncRoute(async (req, res) => {
+  if (!stripeReady) return res.status(503).json({ message: 'Stripe billing is not available yet.' })
+  const [products, prices] = await Promise.all([
+    stripeRequest('/v1/products?active=true&limit=50'),
+    stripeRequest('/v1/prices?active=true&limit=100'),
+  ])
+  const priceMap = new Map()
+  for (const price of prices.data || []) {
+    const productId = typeof price.product === 'string' ? price.product : price.product.id
+    if (!priceMap.has(productId)) priceMap.set(productId, [])
+    priceMap.get(productId).push({
+      id: price.id,
+      amount: price.unit_amount,
+      currency: price.currency,
+      type: price.type,
+      recurring: price.recurring,
+    })
+  }
+  res.json({
+    products: (products.data || []).map((product) => ({
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      prices: priceMap.get(product.id) || [],
+    })),
+  })
+}))
+
+app.get('/api/billing/stripe/invoices', requireAuth, asyncRoute(async (req, res) => {
+  if (!stripeReady) return res.status(503).json({ message: 'Stripe billing is not available yet.' })
+  const invoices = await stripeRequest('/v1/invoices?limit=50')
+  res.json({
+    items: (invoices.data || []).map((invoice) => ({
+      id: invoice.id,
+      number: invoice.number,
+      status: invoice.status,
+      amount: invoice.amount_due,
+      currency: invoice.currency,
+      createdAt: invoice.created,
+      hostedUrl: invoice.hosted_invoice_url,
+      customerEmail: invoice.customer_email,
+    })),
+  })
+}))
+
+app.post('/api/billing/stripe/checkout', requireAuth, asyncRoute(async (req, res) => {
+  if (!stripeReady) return res.status(503).json({ message: 'Stripe billing is not available yet.' })
+  const priceId = text(req.body?.priceId)
+  const email = text(req.body?.email)
+  if (!priceId) return res.status(400).json({ message: 'Choose a Stripe price first.' })
+  const price = await stripeRequest(`/v1/prices/${encodeURIComponent(priceId)}`)
+  if (!price.active) return res.status(400).json({ message: 'That Stripe price is no longer active.' })
+  const origin = `${req.protocol}://${req.get('host')}`
+  const session = await stripeRequest('/v1/checkout/sessions', {
+    method: 'POST',
+    body: new URLSearchParams({
+      mode: price.type === 'recurring' ? 'subscription' : 'payment',
+      'line_items[0][price]': price.id,
+      'line_items[0][quantity]': '1',
+      ...(email ? { customer_email: email } : {}),
+      success_url: `${origin}/?billing=success`,
+      cancel_url: `${origin}/?billing=cancelled`,
+      'metadata[console]': 'xtream-cable-master-console',
+    }).toString(),
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  })
+  res.json({ url: session.url })
 }))
 
 app.patch('/api/settings', requireAuth, asyncRoute(async (req, res) => {
