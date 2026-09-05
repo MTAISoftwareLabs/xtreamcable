@@ -1,1 +1,2 @@
 - [Console persistence](console-persistence.md) — Keep operator mutations server-side and refresh the authenticated bootstrap after writes so changes remain consistent across devices.
+- [Stripe connector runtime](stripe-connector-runtime.md) — Server-side Stripe calls must use the Replit Connectors SDK proxy; raw identity variables may be withheld from workflows.
