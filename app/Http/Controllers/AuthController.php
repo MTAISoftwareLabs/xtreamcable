@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
@@ -11,7 +12,7 @@ class AuthController extends Controller
     {
         return response()->json([
             'authenticated' => Auth::check(),
-            'user' => Auth::user() ? ['name' => 'Operator', 'role' => 'Master access'] : null
+            'user' => Auth::user() ? ['name' => Auth::user()->name, 'role' => 'Master access'] : null
         ]);
     }
 
@@ -20,21 +21,17 @@ class AuthController extends Controller
         $username = strtolower(trim($request->input('username')));
         $password = trim($request->input('password', ''));
 
-        if ($username !== 'operator' || $password !== 'xtream2026') {
+        $user = \App\Models\User::where('email', $username . '@xtreamcable.local')->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
             return response()->json(['message' => 'That operator ID or password is not recognized.'], 401);
         }
-
-        // Fake login for single-user system
-        $user = \App\Models\User::firstOrCreate(
-            ['email' => 'operator@xtreamcable.local'],
-            ['name' => 'Operator', 'password' => bcrypt('xtream2026')]
-        );
 
         Auth::login($user);
 
         return response()->json([
             'authenticated' => true,
-            'user' => ['name' => 'Operator', 'role' => 'Master access']
+            'user' => ['name' => $user->name, 'role' => 'Master access']
         ]);
     }
 
@@ -47,3 +44,4 @@ class AuthController extends Controller
         return response()->json(['authenticated' => false]);
     }
 }
+

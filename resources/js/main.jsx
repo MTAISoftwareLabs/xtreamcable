@@ -481,7 +481,7 @@ function LoginScreen({ onLogin, onForgotPassword }) {
           <div className="login-options"><label className="check-label"><input type="checkbox" defaultChecked /> <span>Remember this device</span></label><button type="button" className="text-button" onClick={onForgotPassword}>Need help signing in?</button></div>
           <button className="primary-button login-button" type="submit">Sign in to console <ArrowRight size={16} /></button>
         </form>
-        <div className="demo-access"><span>Demo access</span><strong>operator</strong><i>/</i><strong>xtream2026</strong></div>
+      </div>
       </div>
       <div className="login-footer"><span><ShieldCheck size={14} />Encrypted operator session</span><span>© 2026 XTREAM CABLE</span></div>
     </div>
