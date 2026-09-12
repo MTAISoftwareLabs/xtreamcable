@@ -482,7 +482,6 @@ function LoginScreen({ onLogin, onForgotPassword }) {
           <button className="primary-button login-button" type="submit">Sign in to console <ArrowRight size={16} /></button>
         </form>
       </div>
-      </div>
       <div className="login-footer"><span><ShieldCheck size={14} />Encrypted operator session</span><span>© 2026 XTREAM CABLE</span></div>
     </div>
   )
