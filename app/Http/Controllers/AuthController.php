@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -31,7 +32,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Please provide both username and password.'], 422);
         }
 
-        $user = \App\Models\User::where(function ($query) use ($username) {
+        $user = User::where(function ($query) use ($username) {
             $query->where('email', $username)
                 ->orWhere('email', $username.'@xtreamcable.local')
                 ->orWhere('name', $username);
@@ -63,4 +64,3 @@ class AuthController extends Controller
         return response()->json(['authenticated' => false]);
     }
 }
-

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Package;
 use App\Models\ActivityLog;
+use App\Models\Package;
 use Illuminate\Http\Request;
 
 class PackageController extends Controller
@@ -18,6 +18,7 @@ class PackageController extends Controller
         $request->validate(['name' => 'required', 'duration_days' => 'required|numeric', 'price' => 'required|numeric']);
         $package = Package::create($request->all());
         ActivityLog::create(['event_type' => 'package.created', 'message' => "Package {$package->name} was created.", 'entity_type' => 'package', 'entity_id' => $package->id]);
+
         return response()->json(['item' => $package], 201);
     }
 
@@ -26,6 +27,7 @@ class PackageController extends Controller
         $package = Package::findOrFail($id);
         $package->update($request->all());
         ActivityLog::create(['event_type' => 'package.updated', 'message' => "Package {$package->name} was updated.", 'entity_type' => 'package', 'entity_id' => $package->id]);
+
         return response()->json(['item' => $package]);
     }
 
@@ -34,6 +36,7 @@ class PackageController extends Controller
         $package = Package::findOrFail($id);
         $package->delete();
         ActivityLog::create(['event_type' => 'package.deleted', 'message' => "Package {$package->name} was removed.", 'entity_type' => 'package', 'entity_id' => $id]);
+
         return response()->noContent();
     }
 }

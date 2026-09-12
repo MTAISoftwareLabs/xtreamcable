@@ -1,20 +1,19 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ContentCategoryController;
+use App\Http\Controllers\ContentItemController;
+use App\Http\Controllers\CreditController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\SubscriberController;
+use App\Http\Controllers\EpgScheduleController;
+use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\PackageController;
-use App\Http\Controllers\UserGroupController;
 use App\Http\Controllers\ResellerController;
 use App\Http\Controllers\ServerController;
 use App\Http\Controllers\StreamSourceController;
-use App\Http\Controllers\ContentCategoryController;
-use App\Http\Controllers\ContentItemController;
-use App\Http\Controllers\EpgScheduleController;
-use App\Http\Controllers\CreditController;
-use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\SubscriberController;
+use App\Http\Controllers\UserGroupController;
+use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
     Route::get('/session', [AuthController::class, 'session']);

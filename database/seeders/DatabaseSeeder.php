@@ -2,20 +2,17 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use App\Models\UserGroup;
+use App\Models\ActivityLog;
+use App\Models\ConsoleSetting;
+use App\Models\ContentCategory;
 use App\Models\Package;
+use App\Models\Reseller;
 use App\Models\Server;
 use App\Models\StreamSource;
-use App\Models\ContentCategory;
-use App\Models\ContentItem;
-use App\Models\Reseller;
-use App\Models\Subscriber;
-use App\Models\ConsoleSetting;
-use App\Models\ActivityLog;
+use App\Models\User;
+use App\Models\UserGroup;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {

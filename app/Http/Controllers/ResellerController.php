@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Reseller;
 use App\Models\ActivityLog;
 use App\Models\CreditTransaction;
+use App\Models\Reseller;
 use Illuminate\Http\Request;
 
 class ResellerController extends Controller
@@ -14,8 +14,9 @@ class ResellerController extends Controller
         $q = $request->q;
         $query = Reseller::query();
         if ($q) {
-            $query->where(fn($b) => $b->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%"));
+            $query->where(fn ($b) => $b->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%"));
         }
+
         return response()->json(['items' => $query->orderBy('created_at', 'desc')->get()]);
     }
 
@@ -27,6 +28,7 @@ class ResellerController extends Controller
             CreditTransaction::create(['reseller_id' => $reseller->id, 'amount' => $request->credits, 'direction' => 'issued', 'description' => "Initial allocation for {$reseller->name}"]);
         }
         ActivityLog::create(['event_type' => 'reseller.created', 'message' => "Reseller {$reseller->name} was created.", 'entity_type' => 'reseller', 'entity_id' => $reseller->id]);
+
         return response()->json(['item' => $reseller], 201);
     }
 
@@ -35,6 +37,7 @@ class ResellerController extends Controller
         $reseller = Reseller::findOrFail($id);
         $reseller->update($request->all());
         ActivityLog::create(['event_type' => 'reseller.updated', 'message' => "Reseller {$reseller->name} was updated.", 'entity_type' => 'reseller', 'entity_id' => $reseller->id]);
+
         return response()->json(['item' => $reseller]);
     }
 
@@ -43,6 +46,7 @@ class ResellerController extends Controller
         $reseller = Reseller::findOrFail($id);
         $reseller->delete();
         ActivityLog::create(['event_type' => 'reseller.deleted', 'message' => "Reseller {$reseller->name} was removed.", 'entity_type' => 'reseller', 'entity_id' => $id]);
+
         return response()->noContent();
     }
 }
