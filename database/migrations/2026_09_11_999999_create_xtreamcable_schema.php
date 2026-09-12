@@ -119,7 +119,7 @@ return new class extends Migration
             $table->string('name');
             $table->string('category')->default('platform');
             $table->text('description')->nullable();
-            $table->jsonb('config')->default('{}');
+            $table->json('config')->nullable();
             $table->string('status')->default('available');
             $table->timestamps();
         });
