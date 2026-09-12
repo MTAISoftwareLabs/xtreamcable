@@ -62,7 +62,7 @@ const logoPath = '/attached_assets/logo_1788516695953.png'
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(options.headers || {}) },
     ...options,
   })
   const payload = await response.json().catch(() => ({}))
@@ -260,7 +260,7 @@ function App() {
     try {
       const response = await fetch('/api/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ username, password }),
       })

@@ -10,28 +10,47 @@ class AuthController extends Controller
 {
     public function session(Request $request)
     {
+        $user = Auth::user();
+
         return response()->json([
             'authenticated' => Auth::check(),
-            'user' => Auth::user() ? ['name' => Auth::user()->name, 'role' => 'Master access'] : null
+            'user' => $user ? [
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => 'Master access',
+            ] : null,
         ]);
     }
 
     public function login(Request $request)
     {
-        $username = strtolower(trim($request->input('username')));
+        $username = strtolower(trim($request->input('username', '')));
         $password = trim($request->input('password', ''));
 
-        $user = \App\Models\User::where('email', $username . '@xtreamcable.local')->first();
-
-        if (! $user || ! Hash::check($password, $user->password)) {
-            return response()->json(['message' => 'That operator ID or password is not recognized.'], 401);
+        if (empty($username) || empty($password)) {
+            return response()->json(['message' => 'Please provide both username and password.'], 422);
         }
 
-        Auth::login($user);
+        $user = \App\Models\User::where(function ($query) use ($username) {
+            $query->where('email', $username)
+                ->orWhere('email', $username.'@xtreamcable.local')
+                ->orWhere('name', $username);
+        })->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            return response()->json(['message' => 'Invalid operator credentials. Please check your username and password.'], 401);
+        }
+
+        Auth::login($user, true);
+        $request->session()->regenerate();
 
         return response()->json([
             'authenticated' => true,
-            'user' => ['name' => $user->name, 'role' => 'Master access']
+            'user' => [
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => 'Master access',
+            ],
         ]);
     }
 

@@ -16,31 +16,33 @@ use App\Http\Controllers\EpgScheduleController;
 use App\Http\Controllers\CreditController;
 use App\Http\Controllers\IntegrationController;
 
-Route::get('/session', [AuthController::class, 'session']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout']);
+Route::middleware('web')->group(function () {
+    Route::get('/session', [AuthController::class, 'session']);
+    Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/logout', [AuthController::class, 'logout']);
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/health', [DashboardController::class, 'health']);
-    Route::get('/bootstrap', [DashboardController::class, 'bootstrap']);
-    Route::get('/activity', [DashboardController::class, 'activity']);
-    Route::get('/settings', [DashboardController::class, 'settings']);
+    Route::middleware('auth')->group(function () {
+        Route::get('/health', [DashboardController::class, 'health']);
+        Route::get('/bootstrap', [DashboardController::class, 'bootstrap']);
+        Route::get('/activity', [DashboardController::class, 'activity']);
+        Route::get('/settings', [DashboardController::class, 'settings']);
 
-    Route::apiResource('users', SubscriberController::class);
-    Route::apiResource('groups', UserGroupController::class);
-    Route::apiResource('packages', PackageController::class);
-    Route::apiResource('servers', ServerController::class);
-    Route::apiResource('sources', StreamSourceController::class);
-    Route::apiResource('categories', ContentCategoryController::class);
-    Route::apiResource('epg', EpgScheduleController::class);
-    Route::apiResource('resellers', ResellerController::class);
-    Route::apiResource('content', ContentItemController::class);
+        Route::apiResource('users', SubscriberController::class);
+        Route::apiResource('groups', UserGroupController::class);
+        Route::apiResource('packages', PackageController::class);
+        Route::apiResource('servers', ServerController::class);
+        Route::apiResource('sources', StreamSourceController::class);
+        Route::apiResource('categories', ContentCategoryController::class);
+        Route::apiResource('epg', EpgScheduleController::class);
+        Route::apiResource('resellers', ResellerController::class);
+        Route::apiResource('content', ContentItemController::class);
 
-    Route::get('/credits', [CreditController::class, 'index']);
-    Route::post('/credits/issue', [CreditController::class, 'issue']);
-    Route::post('/credits/transfer', [CreditController::class, 'transfer']);
+        Route::get('/credits', [CreditController::class, 'index']);
+        Route::post('/credits/issue', [CreditController::class, 'issue']);
+        Route::post('/credits/transfer', [CreditController::class, 'transfer']);
 
-    Route::get('/integrations', [IntegrationController::class, 'index']);
-    Route::patch('/integrations/{integration}', [IntegrationController::class, 'update']);
-    Route::post('/integrations/{integration}/test', [IntegrationController::class, 'test']);
+        Route::get('/integrations', [IntegrationController::class, 'index']);
+        Route::patch('/integrations/{integration}', [IntegrationController::class, 'update']);
+        Route::post('/integrations/{integration}/test', [IntegrationController::class, 'test']);
+    });
 });
