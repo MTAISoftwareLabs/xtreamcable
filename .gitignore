@@ -25,3 +25,12 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Scratch & deployment artifacts
+*.zip
+*.tar.gz
+*.py
+check_log.php
+create_zip.php
+db_test.php
+
