@@ -14,7 +14,7 @@ class ResellerController extends Controller
         $q = $request->q;
         $query = Reseller::query();
         if ($q) {
-            $query->where(fn($b) => $b->where('name', 'ilike', "%{$q}%")->orWhere('email', 'ilike', "%{$q}%"));
+            $query->where(fn($b) => $b->where('name', 'like', "%{$q}%")->orWhere('email', 'like', "%{$q}%"));
         }
         return response()->json(['items' => $query->orderBy('created_at', 'desc')->get()]);
     }

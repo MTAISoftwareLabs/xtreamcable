@@ -16,9 +16,9 @@ class SubscriberController extends Controller
             ->select('subscribers.*', 'packages.name as packageName', 'user_groups.name as groupName');
             
         if ($q) {
-            $query->where(fn($b) => $b->where('subscribers.name', 'ilike', "%{$q}%")
-                ->orWhere('subscribers.username', 'ilike', "%{$q}%")
-                ->orWhere('subscribers.email', 'ilike', "%{$q}%"));
+            $query->where(fn($b) => $b->where('subscribers.name', 'like', "%{$q}%")
+                ->orWhere('subscribers.username', 'like', "%{$q}%")
+                ->orWhere('subscribers.email', 'like', "%{$q}%"));
         }
         
         return response()->json(['items' => $query->orderBy('subscribers.created_at', 'desc')->get()]);

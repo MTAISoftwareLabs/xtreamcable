@@ -756,15 +756,110 @@ function UsersView({ users, resellers, onAction, onEdit, onDelete }) {
 }
 
 function ActivityList({ items }) {
-  return <div className="activity-list">{items.map((item) => <div className="activity-row" key={item.id}><span className="activity-dot" /><div><strong>{item.message}</strong><small>{formatDate(item.createdAt)}</small></div></div>)}</div>
+  return (
+    <div className="activity-list">
+      {items.map((item) => (
+        <div className="activity-row" key={item.id}>
+          <span className="activity-dot" />
+          <div className="activity-content">
+            <strong>{item.message}</strong>
+            <small>{formatDate(item.created_at || item.createdAt)}</small>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function ManagedList({ title, items, emptyTitle, emptyDescription, action, actionLabel = 'Add', valueKey, onEdit, onDelete }) {
-  return <div className="data-panel managed-list-panel"><div className="toolbar"><div><span className="section-kicker">MANAGEMENT</span><h2>{title}</h2></div><button className="primary-button" onClick={action}><Plus size={15} />{actionLabel}</button></div>{items.length ? <div className="managed-list">{items.map((item) => <div className="managed-row" key={item.id}><span className="managed-icon"><Box size={16} /></span><div><strong>{item.name}</strong><small>{item.description || item.url || `${item.memberCount || 0} members`}</small></div><span className="managed-value">{valueKey === 'url' ? 'Ready' : valueKey === 'contentCount' ? `${item.contentCount || 0} items` : title === 'Subscriber packages' ? `$${Number(item.price || 0).toFixed(2)} · ${item.durationDays} days` : `${item.memberCount || 0} members`}</span><div className="row-actions">{onEdit && <button className="table-more" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}><Pencil size={14} /></button>}{onDelete ? <button className="table-more danger-action" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.name}`}><X size={15} /></button> : !onEdit && <button className="table-more"><MoreHorizontal size={16} /></button>}</div></div>)}</div> : <EmptyState icon={Box} title={emptyTitle} description={emptyDescription} action={{ label: actionLabel, onClick: action }} />}</div>
+  return (
+    <div className="data-panel managed-list-panel">
+      <div className="toolbar">
+        <div>
+          <span className="section-kicker">MANAGEMENT</span>
+          <h2>{title}</h2>
+        </div>
+        <button className="primary-button" onClick={action}>
+          <Plus size={15} />{actionLabel}
+        </button>
+      </div>
+      {items.length ? (
+        <div className="managed-list">
+          {items.map((item) => (
+            <div className="managed-row" key={item.id}>
+              <span className="managed-icon"><Box size={16} /></span>
+              <div className="managed-content">
+                <strong>{item.name}</strong>
+                <small>{item.description || item.url || `${item.member_count ?? item.memberCount ?? 0} members`}</small>
+              </div>
+              <span className="managed-value">
+                {valueKey === 'url' ? (item.status || 'Ready') :
+                 valueKey === 'contentCount' ? `${item.content_count ?? item.contentCount ?? 0} items` :
+                 title === 'Subscriber packages' ? `$${Number(item.price || 0).toFixed(2)} · ${item.duration_days ?? item.durationDays ?? 30} days` :
+                 `${item.member_count ?? item.memberCount ?? 0} members`}
+              </span>
+              <div className="row-actions">
+                {onEdit && (
+                  <button className="table-more" onClick={() => onEdit(item)} aria-label={`Edit ${item.name}`}>
+                    <Pencil size={14} />
+                  </button>
+                )}
+                {onDelete ? (
+                  <button className="table-more danger-action" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.name}`}>
+                    <X size={15} />
+                  </button>
+                ) : !onEdit && (
+                  <button className="table-more">
+                    <MoreHorizontal size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={Box} title={emptyTitle} description={emptyDescription} action={{ label: actionLabel, onClick: action }} />
+      )}
+    </div>
+  )
 }
 
 function EpgList({ items, onEdit, onDelete }) {
-  return <div className="data-panel managed-list-panel"><div className="toolbar"><div><span className="section-kicker">CONTENT LIBRARY</span><h2>EPG schedules</h2></div><span className="muted-label">{items.length} scheduled</span></div>{items.length ? <div className="managed-list">{items.map((item) => <div className="managed-row" key={item.id}><span className="managed-icon epg-icon"><CalendarDays size={16} /></span><div><strong>{item.programName}</strong><small>{item.channelName} · {formatDate(item.startsAt)}</small></div><span className="managed-value">{item.status}</span><div className="row-actions"><button className="table-more" onClick={() => onEdit(item)} aria-label={`Edit ${item.programName}`}><Pencil size={14} /></button><button className="table-more danger-action" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.programName}`}><X size={15} /></button></div></div>)}</div> : <EmptyState icon={CalendarDays} title="No EPG schedules connected" description="Connect a program guide to populate your channel schedules." />}</div>
+  return (
+    <div className="data-panel managed-list-panel">
+      <div className="toolbar">
+        <div>
+          <span className="section-kicker">CONTENT LIBRARY</span>
+          <h2>EPG schedules</h2>
+        </div>
+        <span className="muted-label">{items.length} scheduled</span>
+      </div>
+      {items.length ? (
+        <div className="managed-list">
+          {items.map((item) => (
+            <div className="managed-row" key={item.id}>
+              <span className="managed-icon epg-icon"><CalendarDays size={16} /></span>
+              <div className="managed-content">
+                <strong>{item.program_name || item.programName}</strong>
+                <small>{item.channel_name || item.channelName} · {formatDate(item.starts_at || item.startsAt)}</small>
+              </div>
+              <span className="managed-value">{item.status}</span>
+              <div className="row-actions">
+                <button className="table-more" onClick={() => onEdit(item)} aria-label={`Edit ${item.program_name || item.programName}`}>
+                  <Pencil size={14} />
+                </button>
+                <button className="table-more danger-action" onClick={() => onDelete(item.id)} aria-label={`Delete ${item.program_name || item.programName}`}>
+                  <X size={15} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState icon={CalendarDays} title="No EPG schedules connected" description="Connect a program guide to populate your channel schedules." />
+      )}
+    </div>
+  )
 }
 
 function ActivityPage({ items = [], scope = 'all', title = 'Activity', description = 'Review recent operational events.', onRefresh }) {

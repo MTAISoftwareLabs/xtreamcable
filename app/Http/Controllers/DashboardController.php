@@ -112,11 +112,11 @@ class DashboardController extends Controller
         $scope = in_array($request->scope, ['user', 'reseller', 'stream', 'all']) ? $request->scope : 'all';
         if ($scope === 'user') $query->where(fn($q) => $q->where('entity_type', 'user')->orWhere('event_type', 'like', 'user.%'));
         if ($scope === 'reseller') $query->where(fn($q) => $q->whereIn('entity_type', ['reseller', 'credits'])->orWhere('event_type', 'like', 'reseller.%')->orWhere('event_type', 'like', 'credits.%'));
-        if ($scope === 'stream') $query->where(fn($q) => $q->whereIn('entity_type', ['source', 'server'])->orWhere('event_type', 'ilike', '%stream%')->orWhere('event_type', 'ilike', '%source%')->orWhere('event_type', 'ilike', '%server%'));
+        if ($scope === 'stream') $query->where(fn($q) => $q->whereIn('entity_type', ['source', 'server'])->orWhere('event_type', 'like', '%stream%')->orWhere('event_type', 'like', '%source%')->orWhere('event_type', 'like', '%server%'));
         
         if ($request->q) {
             $q = $request->q;
-            $query->where(fn($b) => $b->where('message', 'ilike', "%{$q}%")->orWhere('event_type', 'ilike', "%{$q}%")->orWhere('entity_type', 'ilike', "%{$q}%"));
+            $query->where(fn($b) => $b->where('message', 'like', "%{$q}%")->orWhere('event_type', 'like', "%{$q}%")->orWhere('entity_type', 'like', "%{$q}%"));
         }
         
         if ($request->eventType) $query->where('event_type', $request->eventType);
