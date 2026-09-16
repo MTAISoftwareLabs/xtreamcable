@@ -806,11 +806,11 @@ function ManagedList({ title, items, emptyTitle, emptyDescription, action, actio
       {items.length ? (
         <div className="managed-list">
           {items.map((item) => (
-            <div className="managed-row" key={item.id}>
+            <div className="managed-row" key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
               <span className="managed-icon"><Box size={16} /></span>
-              <div className="managed-content">
-                <strong>{item.name}</strong>
-                <small>{item.description || item.url || `${item.member_count ?? item.memberCount ?? 0} members`}</small>
+              <div className="managed-content" style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 auto', minWidth: 0 }}>
+                <strong style={{ display: 'block', color: '#ecf3f5', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.3' }}>{item.name}</strong>
+                <small style={{ display: 'block', color: '#7b8b9c', fontSize: '11px', margin: 0, lineHeight: '1.4' }}>{item.description || item.url || `${item.member_count ?? item.memberCount ?? 0} members`}</small>
               </div>
               <span className="managed-value">
                 {valueKey === 'url' ? (item.status || 'Ready') :
@@ -857,11 +857,11 @@ function EpgList({ items, onEdit, onDelete }) {
       {items.length ? (
         <div className="managed-list">
           {items.map((item) => (
-            <div className="managed-row" key={item.id}>
+            <div className="managed-row" key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
               <span className="managed-icon epg-icon"><CalendarDays size={16} /></span>
-              <div className="managed-content">
-                <strong>{item.program_name || item.programName}</strong>
-                <small>{item.channel_name || item.channelName} · {formatDate(item.starts_at || item.startsAt)}</small>
+              <div className="managed-content" style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: '1 1 auto', minWidth: 0 }}>
+                <strong style={{ display: 'block', color: '#ecf3f5', fontSize: '13px', fontWeight: 600, margin: 0, lineHeight: '1.3' }}>{item.program_name || item.programName}</strong>
+                <small style={{ display: 'block', color: '#7b8b9c', fontSize: '11px', margin: 0, lineHeight: '1.4' }}>{item.channel_name || item.channelName} · {formatDate(item.starts_at || item.startsAt)}</small>
               </div>
               <span className="managed-value">{item.status}</span>
               <div className="row-actions">
