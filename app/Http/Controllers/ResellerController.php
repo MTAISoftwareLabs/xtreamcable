@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ResellerWelcomeMail;
 use App\Models\ActivityLog;
 use App\Models\CreditTransaction;
 use App\Models\Reseller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class ResellerController extends Controller
 {
@@ -23,13 +27,30 @@ class ResellerController extends Controller
     public function store(Request $request)
     {
         $request->validate(['name' => 'required', 'email' => 'required']);
-        $reseller = Reseller::create($request->all());
+
+        $rawPassword = $request->password ? trim($request->password) : 'Reseller#'.rand(1000, 9999);
+        $data = $request->all();
+        $data['password'] = Hash::make($rawPassword);
+        $data['raw_password'] = $rawPassword;
+
+        $reseller = Reseller::create($data);
+
         if ($request->credits > 0) {
             CreditTransaction::create(['reseller_id' => $reseller->id, 'amount' => $request->credits, 'direction' => 'issued', 'description' => "Initial allocation for {$reseller->name}"]);
         }
-        ActivityLog::create(['event_type' => 'reseller.created', 'message' => "Reseller {$reseller->name} was created.", 'entity_type' => 'reseller', 'entity_id' => $reseller->id]);
 
-        return response()->json(['item' => $reseller], 201);
+        ActivityLog::create(['event_type' => 'reseller.created', 'message' => "Reseller {$reseller->name} was created with password {$rawPassword}.", 'entity_type' => 'reseller', 'entity_id' => $reseller->id]);
+
+        // Attempt Email dispatch safely
+        if ($reseller->email) {
+            try {
+                Mail::to($reseller->email)->send(new ResellerWelcomeMail($reseller, $rawPassword));
+            } catch (\Throwable $e) {
+                Log::warning("Reseller welcome email failed for {$reseller->email}: ".$e->getMessage());
+            }
+        }
+
+        return response()->json(['item' => $reseller, 'generated_password' => $rawPassword], 201);
     }
 
     public function update(Request $request, $id)

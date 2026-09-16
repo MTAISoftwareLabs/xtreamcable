@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Reseller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,15 +13,36 @@ class AuthController extends Controller
     public function session(Request $request)
     {
         $user = Auth::user();
+        if ($user) {
+            return response()->json([
+                'authenticated' => true,
+                'user' => [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => 'Master access',
+                ],
+            ]);
+        }
 
-        return response()->json([
-            'authenticated' => Auth::check(),
-            'user' => $user ? [
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => 'Master access',
-            ] : null,
-        ]);
+        $resellerId = $request->session()->get('reseller_id');
+        if ($resellerId) {
+            $reseller = Reseller::find($resellerId);
+            if ($reseller && $reseller->status === 'active') {
+                return response()->json([
+                    'authenticated' => true,
+                    'user' => [
+                        'id' => $reseller->id,
+                        'name' => $reseller->name,
+                        'email' => $reseller->email,
+                        'role' => 'Reseller',
+                        'credits' => $reseller->credits,
+                        'capacity' => $reseller->capacity,
+                    ],
+                ]);
+            }
+        }
+
+        return response()->json(['authenticated' => false, 'user' => null]);
     }
 
     public function login(Request $request)
@@ -38,26 +60,55 @@ class AuthController extends Controller
                 ->orWhere('name', $username);
         })->first();
 
-        if (! $user || ! Hash::check($password, $user->password)) {
-            return response()->json(['message' => 'Invalid operator credentials. Please check your username and password.'], 401);
+        if ($user && Hash::check($password, $user->password)) {
+            Auth::login($user, true);
+            $request->session()->forget('reseller_id');
+            $request->session()->regenerate();
+
+            return response()->json([
+                'authenticated' => true,
+                'user' => [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => 'Master access',
+                ],
+            ]);
         }
 
-        Auth::login($user, true);
-        $request->session()->regenerate();
+        // Check Resellers table
+        $reseller = Reseller::where(function ($query) use ($username) {
+            $query->where('email', $username)
+                ->orWhere('name', $username);
+        })->first();
 
-        return response()->json([
-            'authenticated' => true,
-            'user' => [
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => 'Master access',
-            ],
-        ]);
+        if ($reseller && $reseller->password && Hash::check($password, $reseller->password)) {
+            if ($reseller->status !== 'active') {
+                return response()->json(['message' => 'Your reseller account is currently suspended.'], 403);
+            }
+
+            $request->session()->put('reseller_id', $reseller->id);
+            $request->session()->regenerate();
+
+            return response()->json([
+                'authenticated' => true,
+                'user' => [
+                    'id' => $reseller->id,
+                    'name' => $reseller->name,
+                    'email' => $reseller->email,
+                    'role' => 'Reseller',
+                    'credits' => $reseller->credits,
+                    'capacity' => $reseller->capacity,
+                ],
+            ]);
+        }
+
+        return response()->json(['message' => 'Invalid operator credentials. Please check your username and password.'], 401);
     }
 
     public function logout(Request $request)
     {
         Auth::logout();
+        $request->session()->forget('reseller_id');
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 

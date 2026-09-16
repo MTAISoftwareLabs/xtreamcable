@@ -15,8 +15,12 @@ class PackageController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required', 'duration_days' => 'required|numeric', 'price' => 'required|numeric']);
-        $package = Package::create($request->all());
+        $data = $request->all();
+        if ($request->has('durationDays')) {
+            $data['duration_days'] = $request->durationDays;
+            unset($data['durationDays']);
+        }
+        $package = Package::create($data);
         ActivityLog::create(['event_type' => 'package.created', 'message' => "Package {$package->name} was created.", 'entity_type' => 'package', 'entity_id' => $package->id]);
 
         return response()->json(['item' => $package], 201);
@@ -25,7 +29,12 @@ class PackageController extends Controller
     public function update(Request $request, $id)
     {
         $package = Package::findOrFail($id);
-        $package->update($request->all());
+        $data = $request->all();
+        if ($request->has('durationDays')) {
+            $data['duration_days'] = $request->durationDays;
+            unset($data['durationDays']);
+        }
+        $package->update($data);
         ActivityLog::create(['event_type' => 'package.updated', 'message' => "Package {$package->name} was updated.", 'entity_type' => 'package', 'entity_id' => $package->id]);
 
         return response()->json(['item' => $package]);

@@ -153,12 +153,12 @@ const utilityItems = [
 ]
 
 const pageMeta = {
-  dashboard: { eyebrow: 'Master console', title: 'Dashboard', description: 'A live operational overview of your XTREAM CABLE network.' },
+  dashboard: { eyebrow: 'Master console', title: 'Dashboard', description: 'A live operational overview of your XTREME CABLE network.' },
   users: { eyebrow: 'User operations', title: 'All Users', description: 'Manage subscriber access, plans, and account health from one workspace.' },
   'user-groups': { eyebrow: 'User operations', title: 'User Groups', description: 'Organize subscribers into access groups and service segments.' },
   packages: { eyebrow: 'User operations', title: 'Packages', description: 'Create and maintain the plans available to your subscriber base.' },
   'user-activity': { eyebrow: 'User operations', title: 'User Activity', description: 'Review account events and recent subscriber activity.' },
-  expiring: { eyebrow: 'User operations', title: 'Expiring Users', description: 'A dedicated operational workspace for this Xtream Cable control surface.' },
+  expiring: { eyebrow: 'User operations', title: 'Expiring Users', description: 'A dedicated operational workspace for this Xtreme Cable control surface.' },
   resellers: { eyebrow: 'Channel operations', title: 'Reseller accounts', description: 'Manage partner accounts, allocated credits, commissions, and user capacity.' },
   credits: { eyebrow: 'Channel operations', title: 'Credits', description: 'Track issued, used, and available reseller credit in one auditable ledger.' },
   transactions: { eyebrow: 'Channel operations', title: 'Transactions', description: 'Review all credit movements across your partner network.' },
@@ -172,17 +172,18 @@ const pageMeta = {
   servers: { eyebrow: 'Infrastructure', title: 'Servers', description: 'Monitor origins, capacity, and the health of your streaming fleet.' },
   streams: { eyebrow: 'Infrastructure', title: 'Streams', description: 'Inspect active streams and playback capacity.' },
   'stream-sources': { eyebrow: 'Infrastructure', title: 'Stream sources', description: 'Configure and manage upstream stream sources.' },
-  monitoring: { eyebrow: 'Stream monitoring', title: 'Stream Monitoring', description: 'A dedicated operational workspace for this Xtream Cable control surface.' },
+  monitoring: { eyebrow: 'Stream monitoring', title: 'Stream Monitoring', description: 'A dedicated operational workspace for this Xtreme Cable control surface.' },
   'stream-logs': { eyebrow: 'Infrastructure', title: 'Stream logs', description: 'Investigate stream events and delivery errors.' },
   analytics: { eyebrow: 'Insights', title: 'Analytics', description: 'Understand growth, retention, and platform performance.' },
   integrations: { eyebrow: 'Insights', title: 'API & Integrations', description: 'Connect the tools that keep your cable operation moving.' },
-  support: { eyebrow: 'Workspace', title: 'Support', description: 'Find answers and contact the XTREAM CABLE operations team.' },
+  support: { eyebrow: 'Workspace', title: 'Support', description: 'Find answers and contact the XTREME CABLE operations team.' },
   billing: { eyebrow: 'Workspace', title: 'Billing', description: 'Manage your plan, invoices, and payment settings.' },
   settings: { eyebrow: 'Workspace', title: 'Settings', description: 'Configure your master console and account preferences.' },
 }
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [currentUser, setCurrentUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [data, setData] = useState(null)
   const [dataError, setDataError] = useState('')
@@ -217,8 +218,14 @@ function App() {
   useEffect(() => {
     fetch('/api/session', { credentials: 'include' })
       .then((response) => response.json())
-      .then((data) => setIsLoggedIn(Boolean(data.authenticated)))
-      .catch(() => setIsLoggedIn(false))
+      .then((data) => {
+        setIsLoggedIn(Boolean(data.authenticated))
+        setCurrentUser(data.user || null)
+      })
+      .catch(() => {
+        setIsLoggedIn(false)
+        setCurrentUser(null)
+      })
       .finally(() => setAuthChecked(true))
   }, [])
 
@@ -267,6 +274,7 @@ function App() {
       const data = await response.json()
       if (!response.ok) return { ok: false, message: data.message || 'Unable to sign in.' }
       setIsLoggedIn(true)
+      setCurrentUser(data.user || null)
       return { ok: true }
     } catch {
       return { ok: false, message: 'The sign-in service is unavailable. Try again.' }
@@ -299,9 +307,21 @@ function App() {
 
   async function runMutation(path, options, successMessage) {
     try {
-      await apiRequest(path, options)
+      const res = await apiRequest(path, options)
       await refreshData()
-      setModal(null)
+      if (res?.generated_password) {
+        setModal({
+          type: 'credentials_created',
+          item: {
+            name: res.item?.name || res.item?.username || 'Account',
+            username: res.item?.username || res.item?.email || '',
+            email: res.item?.email || '',
+            password: res.generated_password,
+          },
+        })
+      } else {
+        setModal(null)
+      }
       showToast(successMessage)
     } catch (error) {
       showToast(error.message, 'error')
@@ -442,11 +462,11 @@ function App() {
 }
 
 function AuthLoadingScreen() {
-  return <div className="auth-loading"><div className="logo-surface loading-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div><span>Securing operator session…</span></div>
+  return <div className="auth-loading"><div className="logo-surface loading-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div><span>Securing operator session…</span></div>
 }
 
 function DataErrorScreen({ message, onRetry, onLogout }) {
-  return <div className="auth-loading"><div className="logo-surface loading-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div><AlertCircle size={18} color="#ff99a8" /><strong>Console data unavailable</strong><span>{message}</span><div className="data-error-actions"><button className="primary-button" onClick={onRetry}><RefreshCw size={14} />Try again</button><button className="outline-button" onClick={onLogout}>Sign out</button></div></div>
+  return <div className="auth-loading"><div className="logo-surface loading-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div><AlertCircle size={18} color="#ff99a8" /><strong>Console data unavailable</strong><span>{message}</span><div className="data-error-actions"><button className="primary-button" onClick={onRetry}><RefreshCw size={14} />Try again</button><button className="outline-button" onClick={onLogout}>Sign out</button></div></div>
 }
 
 function LoginScreen({ onLogin, onForgotPassword }) {
@@ -467,7 +487,7 @@ function LoginScreen({ onLogin, onForgotPassword }) {
       <div className="login-glow login-glow-two" />
       <div className="login-grid" />
       <div className="login-brand">
-        <div className="logo-surface login-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div>
+        <div className="logo-surface login-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div>
         <small>MASTER CONSOLE</small>
       </div>
       <div className="login-card">
@@ -482,7 +502,7 @@ function LoginScreen({ onLogin, onForgotPassword }) {
           <button className="primary-button login-button" type="submit">Sign in to console <ArrowRight size={16} /></button>
         </form>
       </div>
-      <div className="login-footer"><span><ShieldCheck size={14} />Encrypted operator session</span><span>© 2026 XTREAM CABLE</span></div>
+      <div className="login-footer"><span><ShieldCheck size={14} />Encrypted operator session</span><span>© 2026 XTREME CABLE</span></div>
     </div>
   )
 }
@@ -505,7 +525,7 @@ function Sidebar({ activePage, openGroups, setOpenGroups, navigate, collapsed, s
       <aside className={`sidebar ${collapsed ? 'sidebar-collapsed' : ''} ${mobileOpen ? 'sidebar-mobile-open' : ''}`}>
         <div className="sidebar-header">
           <button className="brand-lockup" onClick={() => navigate('dashboard')} aria-label="Go to dashboard">
-            <div className="logo-surface sidebar-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div>
+            <div className="logo-surface sidebar-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div>
             {!collapsed && <span className="sidebar-console-label">MASTER<br />CONSOLE</span>}
           </button>
           <button className="collapse-button" aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'} onClick={() => setCollapsed((value) => !value)}>{collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}</button>
@@ -533,7 +553,7 @@ function NavItem({ item, active, collapsed, onClick }) {
 function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, searchInputRef, onLogout, onSettings, onMenu }) {
   return (
     <header className="topbar">
-      <div className="mobile-header"><button onClick={onMenu} aria-label="Open navigation"><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREAM CABLE" /></div></div>
+      <div className="mobile-header"><button onClick={onMenu} aria-label="Open navigation"><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div></div>
       <div className="breadcrumbs"><span>MASTER CONSOLE</span><ChevronRight size={12} /><strong>{current.eyebrow.toUpperCase()}</strong><b>{current.title}</b></div>
       <div className="topbar-actions">
         <div className={`command-search ${searchMatches.length ? 'has-results' : ''}`}><Search size={16} /><input ref={searchInputRef} aria-label="Search console pages" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search command" /><kbd>⌘ K</kbd>{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={13} /></button>}</div>
@@ -549,7 +569,7 @@ function Dashboard({ summary, activity, onAction, navigate }) {
   const metrics = summary || {}
   return (
     <div className="dashboard-page">
-      <div className="hero-row"><div><div className="eyebrow"><span className="eyebrow-line" />MASTER CONSOLE</div><h1>Good morning, Operator<span>.</span></h1><p className="page-description">Here’s what’s happening across your XTREAM CABLE network today.</p></div><div className="date-chip"><CalendarDays size={15} />{new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' }).format(new Date())}</div></div>
+      <div className="hero-row"><div><div className="eyebrow"><span className="eyebrow-line" />MASTER CONSOLE</div><h1>Good morning, Operator<span>.</span></h1><p className="page-description">Here’s what’s happening across your XTREME CABLE network today.</p></div><div className="date-chip"><CalendarDays size={15} />{new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' }).format(new Date())}</div></div>
       <div className="metric-grid">
         <MetricCard label="Active subscribers" value={metrics.activeSubscribers || 0} meta="From the subscriber ledger" icon={Users} tone="cyan" />
         <MetricCard label="Live channels" value={metrics.liveChannels || 0} meta="Across all sources" icon={Tv} tone="purple" />
@@ -709,7 +729,7 @@ function IntegrationCard({ icon: Icon, name, description, status, onClick }) {
 
 function SettingsView({ settings, onSave }) {
   const [section, setSection] = useState('general')
-  const [form, setForm] = useState({ consoleName: settings?.consoleName || 'XTREAM CABLE', timezone: settings?.timezone || 'Asia/Karachi', operationalAlerts: settings?.operationalAlerts !== false, sessionTimeoutMinutes: settings?.sessionTimeoutMinutes || 720, emailNotifications: settings?.emailNotifications !== false, incidentAlerts: settings?.incidentAlerts !== false })
+  const [form, setForm] = useState({ consoleName: settings?.consoleName || 'XTREME CABLE', timezone: settings?.timezone || 'Asia/Karachi', operationalAlerts: settings?.operationalAlerts !== false, sessionTimeoutMinutes: settings?.sessionTimeoutMinutes || 720, emailNotifications: settings?.emailNotifications !== false, incidentAlerts: settings?.incidentAlerts !== false })
   useEffect(() => {
     if (settings) setForm({ consoleName: settings.consoleName, timezone: settings.timezone, operationalAlerts: settings.operationalAlerts, sessionTimeoutMinutes: settings.sessionTimeoutMinutes || 720, emailNotifications: settings.emailNotifications !== false, incidentAlerts: settings.incidentAlerts !== false })
   }, [settings])
@@ -744,7 +764,7 @@ function BillingView({ invoices }) {
     }
   }
   const formatMoney = (amount, currency = 'usd') => `${currency.toUpperCase()} ${(Number(amount || 0) / 100).toFixed(2)}`
-  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">STRIPE BILLING</span><h2>Master Console</h2><p>{stripe.connected ? 'Stripe is connected. Choose a configured price to open hosted Checkout.' : 'Stripe billing is not connected in this environment.'}</p><div className="plan-details"><span><Check size={14} />Hosted Checkout</span><span><Check size={14} />Subscription support</span><span><Check size={14} />Invoice sync</span></div><label className="billing-email">Checkout email<input type="email" value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} placeholder="billing@example.com" /></label><button className="outline-button" onClick={() => downloadCsv('billing-invoices.csv', invoices)}><Download size={14} />Export local invoices</button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">STRIPE CATALOG</span><h2>Available plans</h2></div><span className={`status-badge ${stripe.connected ? '' : 'status-warning'}`}><i />{stripe.connected ? 'Connected' : 'Unavailable'}</span></div>{stripe.error ? <div className="form-error"><AlertCircle size={14} />{stripe.error}</div> : stripe.loading ? <div className="activity-loading"><RefreshCw size={17} />Loading Stripe billing…</div> : stripe.products.length ? <div className="billing-products">{stripe.products.flatMap((product) => product.prices.map((price) => <div className="invoice-row" key={price.id}><div><strong>{product.name}</strong><small>{product.description || 'XTREAM CABLE service plan'} · {price.recurring ? `Every ${price.recurring.interval}` : 'One-time'}</small></div><span>{formatMoney(price.amount, price.currency)}</span><button className="outline-button" onClick={() => startCheckout(price.id)}>Checkout <ArrowRight size={14} /></button></div>))}</div> : <EmptyState compact icon={CreditCard} title={stripe.connected ? 'No Stripe prices configured' : 'Stripe billing unavailable'} description={stripe.connected ? 'Create an active product price in Stripe to enable hosted Checkout.' : 'Connect Stripe to enable hosted Checkout and invoice sync.'} />}</div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div><button className="outline-button" onClick={() => downloadCsv('stripe-invoices.csv', stripe.invoices)}>Export Stripe invoices <Download size={14} /></button></div>{stripe.invoices.length ? <div className="invoice-list">{stripe.invoices.map((invoice) => <div className="invoice-row" key={invoice.id}><div><strong>{invoice.number || invoice.id}</strong><small>{invoice.customerEmail || 'Stripe customer'} · {formatDate(new Date(invoice.createdAt * 1000).toISOString())}</small></div><span>{formatMoney(invoice.amount, invoice.currency)}</span><span className="status-badge"><i />{invoice.status || 'open'}</span>{invoice.hostedUrl && <a className="outline-button" href={invoice.hostedUrl} target="_blank" rel="noreferrer">Open <ArrowRight size={14} /></a>}</div>)}</div> : <EmptyState compact icon={CreditCard} title="No Stripe invoices yet" description="Invoices will appear after the first Stripe payment or subscription." />}</div></div>
+  return <div className="billing-layout"><div className="panel plan-card"><span className="section-kicker">STRIPE BILLING</span><h2>Master Console</h2><p>{stripe.connected ? 'Stripe is connected. Choose a configured price to open hosted Checkout.' : 'Stripe billing is not connected in this environment.'}</p><div className="plan-details"><span><Check size={14} />Hosted Checkout</span><span><Check size={14} />Subscription support</span><span><Check size={14} />Invoice sync</span></div><label className="billing-email">Checkout email<input type="email" value={checkoutEmail} onChange={(event) => setCheckoutEmail(event.target.value)} placeholder="billing@example.com" /></label><button className="outline-button" onClick={() => downloadCsv('billing-invoices.csv', invoices)}><Download size={14} />Export local invoices</button></div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">STRIPE CATALOG</span><h2>Available plans</h2></div><span className={`status-badge ${stripe.connected ? '' : 'status-warning'}`}><i />{stripe.connected ? 'Connected' : 'Unavailable'}</span></div>{stripe.error ? <div className="form-error"><AlertCircle size={14} />{stripe.error}</div> : stripe.loading ? <div className="activity-loading"><RefreshCw size={17} />Loading Stripe billing…</div> : stripe.products.length ? <div className="billing-products">{stripe.products.flatMap((product) => product.prices.map((price) => <div className="invoice-row" key={price.id}><div><strong>{product.name}</strong><small>{product.description || 'XTREME CABLE service plan'} · {price.recurring ? `Every ${price.recurring.interval}` : 'One-time'}</small></div><span>{formatMoney(price.amount, price.currency)}</span><button className="outline-button" onClick={() => startCheckout(price.id)}>Checkout <ArrowRight size={14} /></button></div>))}</div> : <EmptyState compact icon={CreditCard} title={stripe.connected ? 'No Stripe prices configured' : 'Stripe billing unavailable'} description={stripe.connected ? 'Create an active product price in Stripe to enable hosted Checkout.' : 'Connect Stripe to enable hosted Checkout and invoice sync.'} />}</div><div className="panel invoice-card"><div className="panel-heading"><div><span className="section-kicker">BILLING HISTORY</span><h2>Invoices</h2></div><button className="outline-button" onClick={() => downloadCsv('stripe-invoices.csv', stripe.invoices)}>Export Stripe invoices <Download size={14} /></button></div>{stripe.invoices.length ? <div className="invoice-list">{stripe.invoices.map((invoice) => <div className="invoice-row" key={invoice.id}><div><strong>{invoice.number || invoice.id}</strong><small>{invoice.customerEmail || 'Stripe customer'} · {formatDate(new Date(invoice.createdAt * 1000).toISOString())}</small></div><span>{formatMoney(invoice.amount, invoice.currency)}</span><span className="status-badge"><i />{invoice.status || 'open'}</span>{invoice.hostedUrl && <a className="outline-button" href={invoice.hostedUrl} target="_blank" rel="noreferrer">Open <ArrowRight size={14} /></a>}</div>)}</div> : <EmptyState compact icon={CreditCard} title="No Stripe invoices yet" description="Invoices will appear after the first Stripe payment or subscription." />}</div></div>
 }
 
 function UsersView({ users, resellers, onAction, onEdit, onDelete }) {
@@ -913,6 +933,37 @@ function GenericWorkspace({ page, navigate }) {
 }
 
 function BackendModal({ type, item, resellers, packages, groups, onClose, onSubmit }) {
+  if (type === 'credentials_created') {
+    return (
+      <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
+        <div className="modal-card">
+          <div className="modal-header">
+            <div>
+              <span className="section-kicker">SUCCESS</span>
+              <h2>Credentials Generated</h2>
+              <p>The login credentials have been configured and dispatched via email.</p>
+            </div>
+            <button className="close-button" onClick={onClose}><X size={17} /></button>
+          </div>
+          <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', margin: '16px 0', border: '1px solid #1e293b' }}>
+            <p style={{ margin: '0 0 8px 0', color: '#94a3b8', fontSize: '13px' }}>Account Name: <strong style={{ color: '#f8fafc' }}>{item?.name}</strong></p>
+            <p style={{ margin: '0 0 8px 0', color: '#94a3b8', fontSize: '13px' }}>Username / Email: <strong style={{ color: '#06b6d4' }}>{item?.username || item?.email}</strong></p>
+            <p style={{ margin: '0', color: '#94a3b8', fontSize: '13px' }}>Password: <code style={{ background: '#1e293b', color: '#22d3ee', padding: '4px 8px', borderRadius: '4px', fontSize: '15px', fontWeight: 'bold' }}>{item?.password}</code></p>
+          </div>
+          <div className="modal-actions">
+            <button type="button" className="primary-button" onClick={() => {
+              navigator.clipboard.writeText(`Account: ${item?.name}\nUsername/Email: ${item?.username || item?.email}\nPassword: ${item?.password}`)
+              alert('Credentials copied to clipboard!')
+            }}>
+              Copy Credentials
+            </button>
+            <button type="button" className="outline-button" onClick={onClose}>Done</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const initialForm = type === 'reseller'
     ? { name: '', email: '', capacity: '100', credits: '0' }
     : type === 'content'
@@ -971,14 +1022,14 @@ function BackendModal({ type, item, resellers, packages, groups, onClose, onSubm
   }
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="modal-card"><div className="modal-header"><div><span className="section-kicker">MASTER CONSOLE</span><h2>{meta[0]}</h2><p>{meta[1]}</p></div><button className="close-button" onClick={onClose}><X size={17} /></button></div><form onSubmit={submit}>
     {type === 'reseller' && <><label>Account name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. North Star IPTV" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="partner@example.com" /></label><div className="form-row"><label>User capacity<input type="number" min="1" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label>{!item && <label>Starting credits<input type="number" min="0" value={form.credits} onChange={(event) => update('credits', event.target.value)} /></label>}</div></>}
-    {type === 'content' && <><label>Content type<select value={form.contentType} onChange={(event) => update('contentType', event.target.value)}><option value="live_tv">Live TV</option><option value="movie">Movie / VOD</option><option value="series">TV Series</option></select></label><label>Content name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. XTREAM News" /></label><div className="form-row"><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Entertainment</option><option>News</option><option>Sports</option><option>Kids</option></select></label><label>Country<select value={form.country} onChange={(event) => update('country', event.target.value)}><option>Pakistan</option><option>United Kingdom</option><option>United States</option><option>International</option></select></label></div><label>Stream source<input value={form.source} onChange={(event) => update('source', event.target.value)} placeholder="Primary origin" /></label></>}
+    {type === 'content' && <><label>Content type<select value={form.contentType} onChange={(event) => update('contentType', event.target.value)}><option value="live_tv">Live TV</option><option value="movie">Movie / VOD</option><option value="series">TV Series</option></select></label><label>Content name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. XTREME News" /></label><div className="form-row"><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Entertainment</option><option>News</option><option>Sports</option><option>Kids</option></select></label><label>Country<select value={form.country} onChange={(event) => update('country', event.target.value)}><option>Pakistan</option><option>United Kingdom</option><option>United States</option><option>International</option></select></label></div><label>Stream source<input value={form.source} onChange={(event) => update('source', event.target.value)} placeholder="Primary origin" /></label></>}
      {type === 'user' && <><label>Subscriber name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Ahmed Khan" /></label><div className="form-row"><label>Username<input value={form.username} onChange={(event) => update('username', event.target.value)} placeholder="ahmed_khan" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="subscriber@example.com" /></label></div><div className="form-row"><label>Package<select value={form.packageId} onChange={(event) => update('packageId', event.target.value)}><option value="">No package</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Group<select value={form.groupId} onChange={(event) => update('groupId', event.target.value)}><option value="">No group</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div className="form-row"><label>Reseller<select value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="">Direct account</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Expires on<input type="date" value={form.expiresAt} onChange={(event) => update('expiresAt', event.target.value)} /></label></div></>}
     {type === 'group' && <><label>Group name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Premium subscribers" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="What access does this group have?" /></label></>}
     {type === 'package' && <><label>Package name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Gold 30 days" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe the subscriber plan" /></label><div className="form-row"><label>Duration (days)<input type="number" min="1" value={form.durationDays} onChange={(event) => update('durationDays', event.target.value)} /></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => update('price', event.target.value)} /></label></div></>}
     {type === 'server' && <><label>Server name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Primary origin" /></label><label>Host or origin URL<input value={form.host} onChange={(event) => update('host', event.target.value)} placeholder="origin.example.com" /></label><label>Capacity percentage<input type="number" min="1" max="100" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label></>}
     {type === 'source' && <><label>Source name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Partner feed" /></label><label>Source URL<input value={form.url} onChange={(event) => update('url', event.target.value)} placeholder="https://source.example.com/live" /></label></>}
     {type === 'category' && <><label>Category name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Sports" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe this catalog category" /></label></>}
-    {type === 'epg' && <><label>Channel name<input autoFocus value={form.channelName} onChange={(event) => update('channelName', event.target.value)} placeholder="e.g. XTREAM Sports" /></label><label>Program name<input value={form.programName} onChange={(event) => update('programName', event.target.value)} placeholder="e.g. Live match coverage" /></label><div className="form-row"><label>Starts at<input type="datetime-local" value={form.startsAt} onChange={(event) => update('startsAt', event.target.value)} /></label><label>Ends at<input type="datetime-local" value={form.endsAt} onChange={(event) => update('endsAt', event.target.value)} /></label></div></>}
+    {type === 'epg' && <><label>Channel name<input autoFocus value={form.channelName} onChange={(event) => update('channelName', event.target.value)} placeholder="e.g. XTREME Sports" /></label><label>Program name<input value={form.programName} onChange={(event) => update('programName', event.target.value)} placeholder="e.g. Live match coverage" /></label><div className="form-row"><label>Starts at<input type="datetime-local" value={form.startsAt} onChange={(event) => update('startsAt', event.target.value)} /></label><label>Ends at<input type="datetime-local" value={form.endsAt} onChange={(event) => update('endsAt', event.target.value)} /></label></div></>}
     {type === 'issue-credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Master balance</strong><span>These credits can be transferred to active resellers.</span></div></div><label>Credit amount<input autoFocus type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label></>}
     {type === 'credits' && <><div className="transfer-callout"><WalletCards size={20} /><div><strong>Available to transfer</strong><span>Choose a reseller and amount below</span></div></div><label>Destination reseller<select autoFocus value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="" disabled>Select a reseller</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name} · {item.credits} credits</option>)}</select></label><label>Credit amount<input type="number" min="1" value={form.amount} onChange={(event) => update('amount', event.target.value)} placeholder="Enter amount" /></label></>}
     {error && <div className="form-error"><AlertCircle size={14} />{error}</div>}<div className="modal-actions"><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="submit" className="primary-button">{type === 'credits' ? 'Transfer credits' : type === 'issue-credits' ? 'Issue credits' : item ? 'Save changes' : 'Create and continue'}<ArrowRight size={15} /></button></div></form></div></div>

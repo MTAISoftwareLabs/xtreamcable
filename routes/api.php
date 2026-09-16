@@ -13,6 +13,7 @@ use App\Http\Controllers\ServerController;
 use App\Http\Controllers\StreamSourceController;
 use App\Http\Controllers\SubscriberController;
 use App\Http\Controllers\UserGroupController;
+use App\Http\Middleware\EnsureConsoleAuthenticated;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
@@ -20,11 +21,12 @@ Route::middleware('web')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    Route::middleware('auth')->group(function () {
+    Route::middleware(EnsureConsoleAuthenticated::class)->group(function () {
         Route::get('/health', [DashboardController::class, 'health']);
         Route::get('/bootstrap', [DashboardController::class, 'bootstrap']);
         Route::get('/activity', [DashboardController::class, 'activity']);
         Route::get('/settings', [DashboardController::class, 'settings']);
+        Route::patch('/settings', [DashboardController::class, 'updateSettings']);
 
         Route::apiResource('users', SubscriberController::class);
         Route::apiResource('groups', UserGroupController::class);

@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
         // 2. Console Settings
         if (ConsoleSetting::count() === 0) {
             ConsoleSetting::create([
-                'console_name' => 'XTREAM CABLE',
+                'console_name' => 'XTREME CABLE',
                 'timezone' => 'Asia/Karachi',
                 'operational_alerts' => true,
                 'session_timeout_minutes' => 720,
@@ -72,6 +72,7 @@ class DatabaseSeeder extends Seeder
         if (StreamSource::count() === 0) {
             StreamSource::create(['name' => 'Direct Satellite Feed - Feed A', 'url' => 'udp://@239.255.1.1:5000', 'status' => 'active']);
             StreamSource::create(['name' => 'Fiber Uplink Origin - Main', 'url' => 'rtmp://uplink.xtreamcable.net/live/primary', 'status' => 'active']);
+            StreamSource::create(['name' => 'Harrelson TV', 'url' => 'http://vpn.harrelsontv.icu/get.php?username=22467d598b&password=a36afb62cdd9&type=m3u_plus&output=ts', 'status' => 'active']);
         }
 
         // 7. Categories

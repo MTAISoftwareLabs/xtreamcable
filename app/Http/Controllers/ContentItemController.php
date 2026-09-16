@@ -14,7 +14,12 @@ class ContentItemController extends Controller
 
     public function store(Request $request)
     {
-        $item = ContentItem::create($request->all());
+        $data = $request->all();
+        if ($request->has('contentType')) {
+            $data['content_type'] = $request->contentType;
+            unset($data['contentType']);
+        }
+        $item = ContentItem::create($data);
 
         return response()->json(['item' => $item], 201);
     }
@@ -22,7 +27,12 @@ class ContentItemController extends Controller
     public function update(Request $request, $id)
     {
         $item = ContentItem::findOrFail($id);
-        $item->update($request->all());
+        $data = $request->all();
+        if ($request->has('contentType')) {
+            $data['content_type'] = $request->contentType;
+            unset($data['contentType']);
+        }
+        $item->update($data);
 
         return response()->json(['item' => $item]);
     }

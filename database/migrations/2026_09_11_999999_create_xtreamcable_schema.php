@@ -31,6 +31,8 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email')->nullable();
+            $table->string('password')->nullable();
+            $table->string('raw_password')->nullable();
             $table->integer('capacity')->default(100);
             $table->integer('credits')->default(0);
             $table->string('status')->default('active');
@@ -42,6 +44,8 @@ return new class extends Migration
             $table->string('name');
             $table->string('username')->unique();
             $table->string('email')->nullable();
+            $table->string('password')->nullable();
+            $table->string('raw_password')->nullable();
             $table->string('status')->default('active'); // active, paused, expired
             $table->timestamp('expires_at')->nullable();
             $table->foreignId('package_id')->nullable()->constrained()->nullOnDelete();
@@ -127,7 +131,7 @@ return new class extends Migration
 
         Schema::create('console_settings', function (Blueprint $table) {
             $table->id();
-            $table->string('console_name')->default('XTREAM CABLE');
+            $table->string('console_name')->default('XTREME CABLE');
             $table->string('timezone')->default('Asia/Karachi');
             $table->boolean('operational_alerts')->default(true);
             $table->integer('session_timeout_minutes')->default(720);
@@ -157,7 +161,7 @@ return new class extends Migration
         // Insert default console settings
         DB::table('console_settings')->insert([
             'id' => 1,
-            'console_name' => 'XTREAM CABLE',
+            'console_name' => 'XTREME CABLE',
             'created_at' => now(),
             'updated_at' => now(),
         ]);

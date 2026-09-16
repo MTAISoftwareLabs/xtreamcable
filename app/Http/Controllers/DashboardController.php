@@ -29,18 +29,30 @@ class DashboardController extends Controller
         ]);
     }
 
-    public function bootstrap()
+    public function bootstrap(Request $request)
     {
         $settings = ConsoleSetting::first() ?? [
-            'id' => 1, 'consoleName' => 'XTREAM CABLE', 'timezone' => 'Asia/Karachi',
+            'id' => 1, 'consoleName' => 'XTREME CABLE', 'timezone' => 'Asia/Karachi',
             'operationalAlerts' => true, 'sessionTimeoutMinutes' => 720,
             'emailNotifications' => true, 'incidentAlerts' => true,
         ];
 
-        $users = Subscriber::leftJoin('packages', 'packages.id', '=', 'subscribers.package_id')
+        $resellerId = $request->session()->get('reseller_id');
+
+        $usersQuery = Subscriber::leftJoin('packages', 'packages.id', '=', 'subscribers.package_id')
             ->leftJoin('user_groups', 'user_groups.id', '=', 'subscribers.group_id')
-            ->select('subscribers.*', 'packages.name as packageName', 'user_groups.name as groupName')
-            ->orderBy('subscribers.created_at', 'desc')->get();
+            ->select('subscribers.*', 'packages.name as packageName', 'user_groups.name as groupName');
+
+        $txQuery = CreditTransaction::leftJoin('resellers', 'resellers.id', '=', 'credit_transactions.reseller_id')
+            ->select('credit_transactions.*', 'resellers.name as resellerName');
+
+        if ($resellerId) {
+            $usersQuery->where('subscribers.reseller_id', $resellerId);
+            $txQuery->where('credit_transactions.reseller_id', $resellerId);
+        }
+
+        $users = $usersQuery->orderBy('subscribers.created_at', 'desc')->get();
+        $transactions = $txQuery->orderBy('credit_transactions.created_at', 'desc')->limit(100)->get();
 
         $groups = UserGroup::orderBy('created_at', 'desc')->get();
         $packages = Package::orderBy('created_at', 'desc')->get();
@@ -51,25 +63,27 @@ class DashboardController extends Controller
         $categories = ContentCategory::orderBy('created_at', 'desc')->get();
         $epg = EpgSchedule::orderBy('starts_at', 'asc')->get();
 
-        $transactions = CreditTransaction::leftJoin('resellers', 'resellers.id', '=', 'credit_transactions.reseller_id')
-            ->select('credit_transactions.*', 'resellers.name as resellerName')
-            ->orderBy('credit_transactions.created_at', 'desc')->limit(100)->get();
-
         $activity = ActivityLog::orderBy('created_at', 'desc')->limit(50)->get();
         $integrations = ConsoleIntegration::orderBy('id', 'asc')->get();
         $invoices = BillingInvoice::orderBy('issued_at', 'desc')->get();
         $supportRequests = SupportRequest::orderBy('created_at', 'desc')->limit(10)->get();
 
-        $activeSubscribers = Subscriber::where('status', 'active')->count();
+        if ($resellerId) {
+            $currentReseller = Reseller::find($resellerId);
+            $activeSubscribers = Subscriber::where('reseller_id', $resellerId)->where('status', 'active')->count();
+            $availableCredits = $currentReseller ? $currentReseller->credits : 0;
+        } else {
+            $activeSubscribers = Subscriber::where('status', 'active')->count();
+            $issued = CreditTransaction::where('direction', 'issued')->sum('amount');
+            $used = CreditTransaction::whereIn('direction', ['transferred', 'used'])->sum('amount');
+            $availableCredits = $issued - $used;
+        }
+
         $liveChannels = ContentItem::where('content_type', 'live_tv')->where('status', 'active')->count();
         $resellerAccounts = Reseller::where('status', 'active')->count();
         $operationalServers = Server::where('status', 'operational')->count();
         $totalServers = Server::count();
         $activeSources = StreamSource::where('status', 'active')->count();
-
-        $issued = CreditTransaction::where('direction', 'issued')->sum('amount');
-        $used = CreditTransaction::whereIn('direction', ['transferred', 'used'])->sum('amount');
-        $balance = $issued - $used;
 
         // Simplify activity trend for now
         $activityTrend = [];
@@ -99,7 +113,7 @@ class DashboardController extends Controller
                 'totalServers' => $totalServers,
                 'activeSources' => $activeSources,
                 'healthPercent' => $totalServers > 0 ? round(($operationalServers / $totalServers) * 100) : 0,
-                'availableCredits' => $balance,
+                'availableCredits' => $availableCredits,
             ],
         ]);
     }
@@ -149,5 +163,43 @@ class DashboardController extends Controller
     public function settings()
     {
         return response()->json(['settings' => ConsoleSetting::first()]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $settings = ConsoleSetting::first();
+        if (! $settings) {
+            $settings = new ConsoleSetting;
+        }
+
+        if ($request->has('consoleName')) {
+            $settings->console_name = $request->consoleName;
+        }
+        if ($request->has('timezone')) {
+            $settings->timezone = $request->timezone;
+        }
+        if ($request->has('operationalAlerts')) {
+            $settings->operational_alerts = (bool) $request->operationalAlerts;
+        }
+        if ($request->has('sessionTimeoutMinutes')) {
+            $settings->session_timeout_minutes = (int) $request->sessionTimeoutMinutes;
+        }
+        if ($request->has('emailNotifications')) {
+            $settings->email_notifications = (bool) $request->emailNotifications;
+        }
+        if ($request->has('incidentAlerts')) {
+            $settings->incident_alerts = (bool) $request->incidentAlerts;
+        }
+
+        $settings->save();
+
+        ActivityLog::create([
+            'event_type' => 'settings.updated',
+            'message' => 'Console settings updated.',
+            'entity_type' => 'settings',
+            'entity_id' => $settings->id,
+        ]);
+
+        return response()->json(['settings' => $settings]);
     }
 }
