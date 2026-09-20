@@ -288,7 +288,6 @@ function App() {
     return ALL_NAV_GROUPS.map(g => {
        if (g.label === 'Workspace') return g;
        if (g.label === 'Users') return { ...g, items: g.items.filter(i => ['users', 'packages', 'user-activity'].includes(i.id)) };
-       if (g.label === 'Resellers') return { ...g, items: g.items.filter(i => ['credits', 'transactions'].includes(i.id)) };
        if (g.label === 'Content') return { ...g, items: g.items.filter(i => ['live-tv', 'movies', 'series', 'categories', 'epg'].includes(i.id)) };
        return null;
     }).filter(Boolean).filter(g => g.items.length > 0);
