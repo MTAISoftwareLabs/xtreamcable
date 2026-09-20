@@ -45,6 +45,23 @@ class AuthController extends Controller
         return response()->json(['authenticated' => false, 'user' => null]);
     }
 
+    private function safeCheckPassword($password, $hashedPassword)
+    {
+        if (empty($hashedPassword)) {
+            return false;
+        }
+
+        try {
+            return Hash::check($password, $hashedPassword);
+        } catch (\Exception $e) {
+            // If it throws an exception (e.g. "This password does not use the Bcrypt algorithm")
+            // Fall back to plain string comparison.
+            return $password === $hashedPassword;
+        } catch (\Error $e) {
+            return $password === $hashedPassword;
+        }
+    }
+
     public function login(Request $request)
     {
         try {
@@ -61,7 +78,7 @@ class AuthController extends Controller
                     ->orWhere('name', $username);
             })->first();
 
-            if ($user && !empty($user->password) && Hash::check($password, $user->password)) {
+            if ($user && $this->safeCheckPassword($password, $user->password)) {
                 Auth::login($user, true);
                 $request->session()->forget('reseller_id');
                 $request->session()->regenerate();
@@ -82,7 +99,7 @@ class AuthController extends Controller
                     ->orWhere('name', $username);
             })->first();
 
-            if ($reseller && !empty($reseller->password) && Hash::check($password, $reseller->password)) {
+            if ($reseller && $this->safeCheckPassword($password, $reseller->password)) {
                 if ($reseller->status !== 'active') {
                     return response()->json(['message' => 'Your reseller account is currently suspended.'], 403);
                 }

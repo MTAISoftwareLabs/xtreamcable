@@ -29,21 +29,25 @@ Route::middleware('web')->group(function () {
         Route::patch('/settings', [DashboardController::class, 'updateSettings']);
 
         Route::apiResource('users', SubscriberController::class);
-        Route::apiResource('groups', UserGroupController::class);
-        Route::apiResource('packages', PackageController::class);
-        Route::apiResource('servers', ServerController::class);
-        Route::apiResource('sources', StreamSourceController::class);
-        Route::apiResource('categories', ContentCategoryController::class);
-        Route::apiResource('epg', EpgScheduleController::class);
-        Route::apiResource('resellers', ResellerController::class);
-        Route::apiResource('content', ContentItemController::class);
-
         Route::get('/credits', [CreditController::class, 'index']);
-        Route::post('/credits/issue', [CreditController::class, 'issue']);
-        Route::post('/credits/transfer', [CreditController::class, 'transfer']);
 
-        Route::get('/integrations', [IntegrationController::class, 'index']);
-        Route::patch('/integrations/{integration}', [IntegrationController::class, 'update']);
-        Route::post('/integrations/{integration}/test', [IntegrationController::class, 'test']);
+        // Master-only routes
+        Route::middleware(\App\Http\Middleware\EnsureMasterAdmin::class)->group(function () {
+            Route::apiResource('groups', UserGroupController::class);
+            Route::apiResource('packages', PackageController::class);
+            Route::apiResource('servers', ServerController::class);
+            Route::apiResource('sources', StreamSourceController::class);
+            Route::apiResource('categories', ContentCategoryController::class);
+            Route::apiResource('epg', EpgScheduleController::class);
+            Route::apiResource('resellers', ResellerController::class);
+            Route::apiResource('content', ContentItemController::class);
+
+            Route::post('/credits/issue', [CreditController::class, 'issue']);
+            Route::post('/credits/transfer', [CreditController::class, 'transfer']);
+
+            Route::get('/integrations', [IntegrationController::class, 'index']);
+            Route::patch('/integrations/{integration}', [IntegrationController::class, 'update']);
+            Route::post('/integrations/{integration}/test', [IntegrationController::class, 'test']);
+        });
     });
 });

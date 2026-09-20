@@ -95,7 +95,7 @@ function downloadCsv(filename, rows) {
   URL.revokeObjectURL(link.href)
 }
 
-const navGroups = [
+const ALL_NAV_GROUPS = [
   { label: 'Workspace', items: [{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] },
   {
     label: 'Users',
@@ -281,12 +281,25 @@ function App() {
     }
   }
 
+  const isReseller = currentUser?.role === 'Reseller'
+
+  const navGroups = useMemo(() => {
+    if (!isReseller) return ALL_NAV_GROUPS;
+    return ALL_NAV_GROUPS.map(g => {
+       if (g.label === 'Workspace') return g;
+       if (g.label === 'Users') return { ...g, items: g.items.filter(i => ['users', 'packages', 'user-activity'].includes(i.id)) };
+       if (g.label === 'Resellers') return { ...g, items: g.items.filter(i => ['credits', 'transactions'].includes(i.id)) };
+       if (g.label === 'Content') return { ...g, items: g.items.filter(i => ['live-tv', 'movies', 'series', 'categories', 'epg'].includes(i.id)) };
+       return null;
+    }).filter(Boolean).filter(g => g.items.length > 0);
+  }, [isReseller]);
+
   const current = pageMeta[activePage] || pageMeta.dashboard
   const allNavItems = [...navGroups.flatMap((group) => group.items), ...utilityItems]
   const searchMatches = useMemo(() => {
     if (!search.trim()) return []
     return allNavItems.filter((item) => item.label.toLowerCase().includes(search.toLowerCase())).slice(0, 6)
-  }, [search])
+  }, [search, allNavItems])
 
   function navigate(id) {
     setActivePage(id)
@@ -378,6 +391,7 @@ function App() {
   return (
     <div className="app-shell">
       <Sidebar
+        navGroups={navGroups}
         activePage={activePage}
         openGroups={openGroups}
         setOpenGroups={setOpenGroups}
@@ -415,7 +429,7 @@ function App() {
               </div>
             )}
             {activePage === 'dashboard' ? (
-               <Dashboard summary={data.summary} activity={data.activity} onAction={handleAction} navigate={navigate} />
+               <Dashboard isReseller={isReseller} summary={data.summary} activity={data.activity} onAction={handleAction} navigate={navigate} />
             ) : (
               <OperationalPage
                 page={activePage}
@@ -507,7 +521,7 @@ function LoginScreen({ onLogin, onForgotPassword }) {
   )
 }
 
-function Sidebar({ activePage, openGroups, setOpenGroups, navigate, collapsed, setCollapsed, mobileOpen, closeMobile, onLogout }) {
+function Sidebar({ activePage, openGroups, setOpenGroups, navigate, collapsed, setCollapsed, mobileOpen, closeMobile, onLogout, navGroups }) {
   function renderGroup(group) {
     const open = openGroups[group.label]
     return (
@@ -565,7 +579,7 @@ function Topbar({ current, search, setSearch, searchMatches, navigate, notificat
   )
 }
 
-function Dashboard({ summary, activity, onAction, navigate }) {
+function Dashboard({ isReseller, summary, activity, onAction, navigate }) {
   const metrics = summary || {}
   return (
     <div className="dashboard-page">
@@ -577,7 +591,7 @@ function Dashboard({ summary, activity, onAction, navigate }) {
         <MetricCard label="Reseller accounts" value={metrics.resellerAccounts || 0} meta="Partner accounts" icon={UserRound} tone="orange" />
       </div>
        <div className="dashboard-grid">
-       <section className="panel quick-panel"><div className="panel-heading"><div><span className="section-kicker">SHORTCUTS</span><h2>Quick actions</h2></div><span className="muted-label">Get started</span></div><div className="quick-actions"><QuickAction icon={Users} title="Add a user" description="Create a subscriber account" onClick={() => onAction('user')} /><QuickAction icon={UserRound} title="Add reseller" description="Extend your distribution channel" onClick={() => onAction('reseller')} /><QuickAction icon={Tv} title="Add content" description="Onboard a live channel or VOD" onClick={() => onAction('content')} /><QuickAction icon={WalletCards} title="Transfer credits" description="Fund a reseller account" onClick={() => onAction('credits')} /></div></section>
+       <section className="panel quick-panel"><div className="panel-heading"><div><span className="section-kicker">SHORTCUTS</span><h2>Quick actions</h2></div><span className="muted-label">Get started</span></div><div className="quick-actions"><QuickAction icon={Users} title="Add a user" description="Create a subscriber account" onClick={() => onAction('user')} />{!isReseller && <QuickAction icon={UserRound} title="Add reseller" description="Extend your distribution channel" onClick={() => onAction('reseller')} />}{!isReseller && <QuickAction icon={Tv} title="Add content" description="Onboard a live channel or VOD" onClick={() => onAction('content')} />}{!isReseller && <QuickAction icon={WalletCards} title="Transfer credits" description="Fund a reseller account" onClick={() => onAction('credits')} />}</div></section>
         <section className="panel health-panel"><div className="panel-heading"><div><span className="section-kicker">SYSTEM HEALTH</span><h2>Network status</h2></div><span className={`status-badge ${metrics.healthPercent < 100 ? 'status-warning' : ''}`}><i />{metrics.totalServers ? (metrics.healthPercent === 100 ? 'Operational' : 'Attention needed') : 'Awaiting setup'}</span></div><div className="health-status"><div className="health-ring"><div><strong>{metrics.healthPercent || 0}%</strong><small>{metrics.totalServers ? 'server health' : 'no servers'}</small></div></div><div className="health-list"><HealthRow label="Core services" status={metrics.totalServers ? `${metrics.operationalServers}/${metrics.totalServers} ready` : 'No servers'} /><HealthRow label="Stream delivery" status={metrics.activeSources ? `${metrics.activeSources} sources` : 'No sources'} /><HealthRow label="API gateway" status="Online" /></div></div><button className="panel-link" onClick={() => navigate('monitoring')}>Open stream monitoring <ArrowRight size={14} /></button></section>
       </div>
        <section className="panel activity-panel"><div className="panel-heading"><div><span className="section-kicker">ACTIVITY</span><h2>Recent activity</h2></div><button className="panel-link" onClick={() => navigate('user-activity')}>View all <ArrowRight size={14} /></button></div>{activity?.length ? <ActivityList items={activity.slice(0, 3)} /> : <EmptyState compact icon={Activity} title="No activity recorded" description="Events will appear here as your platform starts working." />}</section>
@@ -965,11 +979,11 @@ function BackendModal({ type, item, resellers, packages, groups, onClose, onSubm
   }
 
   const initialForm = type === 'reseller'
-    ? { name: '', email: '', capacity: '100', credits: '0' }
+    ? { name: '', email: '', capacity: '100', credits: '0', password: '' }
     : type === 'content'
       ? { name: '', category: 'Entertainment', country: 'Pakistan', source: 'Primary origin', contentType: 'live_tv' }
       : type === 'user'
-        ? { name: '', username: '', email: '', expiresAt: '', packageId: '', groupId: '', resellerId: '' }
+        ? { name: '', username: '', email: '', expiresAt: '', packageId: '', groupId: '', resellerId: '', password: '' }
         : type === 'group'
           ? { name: '', description: '' }
           : type === 'package'
@@ -993,6 +1007,7 @@ function BackendModal({ type, item, resellers, packages, groups, onClose, onSubm
   }
   const [form, setForm] = useState(initialValues)
   const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const meta = {
     reseller: ['Add reseller account', 'Create a partner account with an initial allocation.'],
     content: ['Add live content', 'Add a channel to your live TV library.'],
@@ -1021,9 +1036,9 @@ function BackendModal({ type, item, resellers, packages, groups, onClose, onSubm
     onSubmit(type, form, item)
   }
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><div className="modal-card"><div className="modal-header"><div><span className="section-kicker">MASTER CONSOLE</span><h2>{meta[0]}</h2><p>{meta[1]}</p></div><button className="close-button" onClick={onClose}><X size={17} /></button></div><form onSubmit={submit}>
-    {type === 'reseller' && <><label>Account name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. North Star IPTV" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="partner@example.com" /></label><div className="form-row"><label>User capacity<input type="number" min="1" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label>{!item && <label>Starting credits<input type="number" min="0" value={form.credits} onChange={(event) => update('credits', event.target.value)} /></label>}</div></>}
+    {type === 'reseller' && <><label>Account name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. North Star IPTV" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="partner@example.com" /></label><label>Password (optional)<div className="password-wrap"><input value={form.password} onChange={(event) => update('password', event.target.value)} type={showPassword ? 'text' : 'password'} placeholder="Leave blank to auto-generate" /><button type="button" onClick={() => setShowPassword((v) => !v)}><Eye size={16} /></button></div></label><div className="form-row"><label>User capacity<input type="number" min="1" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label>{!item && <label>Starting credits<input type="number" min="0" value={form.credits} onChange={(event) => update('credits', event.target.value)} /></label>}</div></>}
     {type === 'content' && <><label>Content type<select value={form.contentType} onChange={(event) => update('contentType', event.target.value)}><option value="live_tv">Live TV</option><option value="movie">Movie / VOD</option><option value="series">TV Series</option></select></label><label>Content name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. XTREME News" /></label><div className="form-row"><label>Category<select value={form.category} onChange={(event) => update('category', event.target.value)}><option>Entertainment</option><option>News</option><option>Sports</option><option>Kids</option></select></label><label>Country<select value={form.country} onChange={(event) => update('country', event.target.value)}><option>Pakistan</option><option>United Kingdom</option><option>United States</option><option>International</option></select></label></div><label>Stream source<input value={form.source} onChange={(event) => update('source', event.target.value)} placeholder="Primary origin" /></label></>}
-     {type === 'user' && <><label>Subscriber name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Ahmed Khan" /></label><div className="form-row"><label>Username<input value={form.username} onChange={(event) => update('username', event.target.value)} placeholder="ahmed_khan" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="subscriber@example.com" /></label></div><div className="form-row"><label>Package<select value={form.packageId} onChange={(event) => update('packageId', event.target.value)}><option value="">No package</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Group<select value={form.groupId} onChange={(event) => update('groupId', event.target.value)}><option value="">No group</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div className="form-row"><label>Reseller<select value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="">Direct account</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Expires on<input type="date" value={form.expiresAt} onChange={(event) => update('expiresAt', event.target.value)} /></label></div></>}
+     {type === 'user' && <><label>Subscriber name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Ahmed Khan" /></label><div className="form-row"><label>Username<input value={form.username} onChange={(event) => update('username', event.target.value)} placeholder="ahmed_khan" /></label><label>Email address<input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} placeholder="subscriber@example.com" /></label></div><label>Password (optional)<div className="password-wrap"><input value={form.password} onChange={(event) => update('password', event.target.value)} type={showPassword ? 'text' : 'password'} placeholder="Leave blank to auto-generate" /><button type="button" onClick={() => setShowPassword((v) => !v)}><Eye size={16} /></button></div></label><div className="form-row"><label>Package<select value={form.packageId} onChange={(event) => update('packageId', event.target.value)}><option value="">No package</option>{packages.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Group<select value={form.groupId} onChange={(event) => update('groupId', event.target.value)}><option value="">No group</option>{groups.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div className="form-row"><label>Reseller<select value={form.resellerId} onChange={(event) => update('resellerId', event.target.value)}><option value="">Direct account</option>{resellers.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>Expires on<input type="date" value={form.expiresAt} onChange={(event) => update('expiresAt', event.target.value)} /></label></div></>}
     {type === 'group' && <><label>Group name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Premium subscribers" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="What access does this group have?" /></label></>}
     {type === 'package' && <><label>Package name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Gold 30 days" /></label><label>Description<textarea value={form.description} onChange={(event) => update('description', event.target.value)} placeholder="Describe the subscriber plan" /></label><div className="form-row"><label>Duration (days)<input type="number" min="1" value={form.durationDays} onChange={(event) => update('durationDays', event.target.value)} /></label><label>Price<input type="number" min="0" step="0.01" value={form.price} onChange={(event) => update('price', event.target.value)} /></label></div></>}
     {type === 'server' && <><label>Server name<input autoFocus value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="e.g. Primary origin" /></label><label>Host or origin URL<input value={form.host} onChange={(event) => update('host', event.target.value)} placeholder="origin.example.com" /></label><label>Capacity percentage<input type="number" min="1" max="100" value={form.capacity} onChange={(event) => update('capacity', event.target.value)} /></label></>}

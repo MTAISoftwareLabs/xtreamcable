@@ -39,7 +39,7 @@ class SubscriberController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required', 'username' => 'required']);
+        $request->validate(['name' => 'required', 'username' => 'required|unique:subscribers,username']);
 
         $resellerId = $request->input('reseller_id', $request->input('resellerId')) ?: $request->session()->get('reseller_id');
         $packageId = $request->input('package_id', $request->input('packageId'));
@@ -128,6 +128,11 @@ class SubscriberController extends Controller
         if ($request->has('expiresAt') || $request->has('expires_at')) {
             $exp = $request->input('expires_at', $request->input('expiresAt'));
             $updateData['expires_at'] = $exp ? date('Y-m-d H:i:s', strtotime($exp)) : null;
+        }
+        if ($request->filled('password')) {
+            $raw = trim($request->password);
+            $updateData['password'] = Hash::make($raw);
+            $updateData['raw_password'] = $raw;
         }
 
         $subscriber->update($updateData);

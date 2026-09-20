@@ -26,7 +26,7 @@ class ResellerController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(['name' => 'required', 'email' => 'required']);
+        $request->validate(['name' => 'required', 'email' => 'required|email|unique:resellers,email']);
 
         $rawPassword = $request->password ? trim($request->password) : 'Reseller#'.rand(1000, 9999);
         $data = $request->all();
@@ -56,7 +56,18 @@ class ResellerController extends Controller
     public function update(Request $request, $id)
     {
         $reseller = Reseller::findOrFail($id);
-        $reseller->update($request->all());
+        
+        $data = $request->all();
+        if ($request->filled('password')) {
+            $raw = trim($request->password);
+            $data['password'] = Hash::make($raw);
+            $data['raw_password'] = $raw;
+        } else {
+            unset($data['password']);
+            unset($data['raw_password']);
+        }
+
+        $reseller->update($data);
         ActivityLog::create(['event_type' => 'reseller.updated', 'message' => "Reseller {$reseller->name} was updated.", 'entity_type' => 'reseller', 'entity_id' => $reseller->id]);
 
         return response()->json(['item' => $reseller]);
