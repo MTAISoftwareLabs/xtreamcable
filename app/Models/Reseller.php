@@ -8,5 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 class Reseller extends Model
 {
     use HasFactory;
+
     protected $guarded = [];
+
+    protected $hidden = ['password'];
 }

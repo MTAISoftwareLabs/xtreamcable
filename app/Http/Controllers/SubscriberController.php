@@ -41,13 +41,14 @@ class SubscriberController extends Controller
     {
         $request->validate(['name' => 'required', 'username' => 'required|unique:subscribers,username']);
 
-        $resellerId = $request->input('reseller_id', $request->input('resellerId')) ?: $request->session()->get('reseller_id');
+        $sessionResellerId = $request->session()->get('reseller_id');
+        $resellerId = $sessionResellerId ?: ($request->input('reseller_id', $request->input('resellerId')) ?: null);
         $packageId = $request->input('package_id', $request->input('packageId'));
         $groupId = $request->input('group_id', $request->input('groupId'));
         $expiresAtInput = $request->input('expires_at', $request->input('expiresAt'));
 
-        if ($request->session()->get('reseller_id')) {
-            $reseller = Reseller::findOrFail($resellerId);
+        if ($sessionResellerId) {
+            $reseller = Reseller::findOrFail($sessionResellerId);
             if ($reseller->credits < 1) {
                 return response()->json(['message' => 'Insufficient credit balance to create line. Please contact administrator.'], 422);
             }
@@ -119,7 +120,7 @@ class SubscriberController extends Controller
         if ($request->has('groupId') || $request->has('group_id')) {
             $updateData['group_id'] = $request->input('group_id', $request->input('groupId')) ?: null;
         }
-        if ($request->has('resellerId') || $request->has('reseller_id')) {
+        if (! $resellerId && ($request->has('resellerId') || $request->has('reseller_id'))) {
             $updateData['reseller_id'] = $request->input('reseller_id', $request->input('resellerId')) ?: null;
         }
         if ($request->has('status')) {
