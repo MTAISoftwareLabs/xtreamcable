@@ -54,36 +54,50 @@ class DashboardController extends Controller
         $users = $usersQuery->orderBy('subscribers.created_at', 'desc')->get();
         $transactions = $txQuery->orderBy('credit_transactions.created_at', 'desc')->limit(100)->get();
 
-        $groups = UserGroup::orderBy('created_at', 'desc')->get();
-        $packages = Package::orderBy('created_at', 'desc')->get();
-        $resellers = Reseller::orderBy('created_at', 'desc')->get();
-        $content = ContentItem::orderBy('created_at', 'desc')->get();
-        $servers = Server::orderBy('created_at', 'desc')->get();
-        $sources = StreamSource::orderBy('created_at', 'desc')->get();
-        $categories = ContentCategory::orderBy('created_at', 'desc')->get();
-        $epg = EpgSchedule::orderBy('starts_at', 'asc')->get();
-
-        $activity = ActivityLog::orderBy('created_at', 'desc')->limit(50)->get();
-        $integrations = ConsoleIntegration::orderBy('id', 'asc')->get();
-        $invoices = BillingInvoice::orderBy('issued_at', 'desc')->get();
-        $supportRequests = SupportRequest::orderBy('created_at', 'desc')->limit(10)->get();
-
         if ($resellerId) {
             $currentReseller = Reseller::find($resellerId);
             $activeSubscribers = Subscriber::where('reseller_id', $resellerId)->where('status', 'active')->count();
             $availableCredits = $currentReseller ? $currentReseller->credits : 0;
+            $liveChannels = 0;
+            $resellerAccounts = 0;
+            $operationalServers = 0;
+            $totalServers = 0;
+            $activeSources = 0;
+            $resellers = collect();
+            $content = collect();
+            $servers = collect();
+            $sources = collect();
+            $categories = collect();
+            $epg = collect();
+            $integrations = collect();
+            $invoices = collect();
+            $supportRequests = collect();
+            $groups = collect();
+            $packages = Package::orderBy('created_at', 'desc')->get();
         } else {
             $activeSubscribers = Subscriber::where('status', 'active')->count();
             $issued = CreditTransaction::where('direction', 'issued')->sum('amount');
             $used = CreditTransaction::whereIn('direction', ['transferred', 'used'])->sum('amount');
             $availableCredits = $issued - $used;
+            $liveChannels = ContentItem::where('content_type', 'live_tv')->where('status', 'active')->count();
+            $resellerAccounts = Reseller::where('status', 'active')->count();
+            $operationalServers = Server::where('status', 'operational')->count();
+            $totalServers = Server::count();
+            $activeSources = StreamSource::where('status', 'active')->count();
+            $groups = UserGroup::orderBy('created_at', 'desc')->get();
+            $packages = Package::orderBy('created_at', 'desc')->get();
+            $resellers = Reseller::orderBy('created_at', 'desc')->get();
+            $content = ContentItem::orderBy('created_at', 'desc')->get();
+            $servers = Server::orderBy('created_at', 'desc')->get();
+            $sources = StreamSource::orderBy('created_at', 'desc')->get();
+            $categories = ContentCategory::orderBy('created_at', 'desc')->get();
+            $epg = EpgSchedule::orderBy('starts_at', 'asc')->get();
+            $integrations = ConsoleIntegration::orderBy('id', 'asc')->get();
+            $invoices = BillingInvoice::orderBy('issued_at', 'desc')->get();
+            $supportRequests = SupportRequest::orderBy('created_at', 'desc')->limit(10)->get();
         }
 
-        $liveChannels = ContentItem::where('content_type', 'live_tv')->where('status', 'active')->count();
-        $resellerAccounts = Reseller::where('status', 'active')->count();
-        $operationalServers = Server::where('status', 'operational')->count();
-        $totalServers = Server::count();
-        $activeSources = StreamSource::where('status', 'active')->count();
+        $activity = ActivityLog::orderBy('created_at', 'desc')->limit(50)->get();
 
         // Simplify activity trend for now
         $activityTrend = [];

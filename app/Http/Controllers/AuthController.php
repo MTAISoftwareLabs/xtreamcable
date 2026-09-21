@@ -73,9 +73,9 @@ class AuthController extends Controller
             }
 
             $user = User::where(function ($query) use ($username) {
-                $query->where('email', $username)
-                    ->orWhere('email', $username.'@xtreamcable.local')
-                    ->orWhere('name', $username);
+                $query->whereRaw('LOWER(email) = ?', [$username])
+                    ->orWhereRaw('LOWER(email) = ?', [$username.'@xtreamcable.local'])
+                    ->orWhereRaw('LOWER(name) = ?', [$username]);
             })->first();
 
             if ($user && $this->safeCheckPassword($password, $user->password)) {
@@ -95,8 +95,8 @@ class AuthController extends Controller
 
             // Check Resellers table
             $reseller = Reseller::where(function ($query) use ($username) {
-                $query->where('email', $username)
-                    ->orWhere('name', $username);
+                $query->whereRaw('LOWER(email) = ?', [$username])
+                    ->orWhereRaw('LOWER(name) = ?', [$username]);
             })->first();
 
             if ($reseller && $this->safeCheckPassword($password, $reseller->password)) {
@@ -122,9 +122,9 @@ class AuthController extends Controller
 
             return response()->json(['message' => 'Invalid operator credentials. Please check your username and password.'], 401);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'DEBUG ERROR: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()], 500);
+            return response()->json(['message' => 'DEBUG ERROR: '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine()], 500);
         } catch (\Error $e) {
-            return response()->json(['message' => 'DEBUG FATAL: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()], 500);
+            return response()->json(['message' => 'DEBUG FATAL: '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine()], 500);
         }
     }
 
