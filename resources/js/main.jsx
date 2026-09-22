@@ -566,13 +566,24 @@ function NavItem({ item, active, collapsed, onClick }) {
   return <button className={`nav-item ${active ? 'active' : ''}`} onClick={onClick} title={collapsed ? item.label : undefined}><Icon size={16} strokeWidth={1.8} /><span>{item.label}</span>{active && <i className="active-pip" />}</button>
 }
 
-function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, searchInputRef, onLogout, onSettings, onMenu }) {
+function Topbar({ current, search, setSearch, searchMatches, navigate, notificationsOpen, setNotificationsOpen, profileOpen, setProfileOpen, searchInputRef, onLogout, onSettings, onMenu, availableCredits }) {
   return (
     <header className="topbar">
       <div className="mobile-header"><button onClick={onMenu} aria-label="Open navigation"><Menu size={21} /></button><div className="logo-surface mobile-logo-surface"><img src={logoPath} alt="XTREME CABLE" /></div></div>
       <div className="breadcrumbs"><span>MASTER CONSOLE</span><ChevronRight size={12} /><strong>{current.eyebrow.toUpperCase()}</strong><b>{current.title}</b></div>
       <div className="topbar-actions">
         <div className={`command-search ${searchMatches.length ? 'has-results' : ''}`}><Search size={16} /><input ref={searchInputRef} aria-label="Search console pages" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search command" /><kbd>⌘ K</kbd>{search && <button aria-label="Clear search" onClick={() => setSearch('')}><X size={13} /></button>}</div>
+        {availableCredits !== undefined && availableCredits !== null && (
+          <div 
+            className="credit-pill" 
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#1e1b4b', color: '#c084fc', padding: '5px 12px', borderRadius: '20px', border: '1px solid #4c1d95', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+            onClick={() => navigate('credits')}
+            title="Available line creation credits"
+          >
+            <WalletCards size={14} style={{ color: '#a855f7' }} />
+            <span>{availableCredits} Credits</span>
+          </div>
+        )}
         <div className="topbar-divider" />
         <div className="popover-wrap"><button aria-label="Open system updates" className="icon-button notification-button" onClick={() => { setNotificationsOpen((value) => !value); setProfileOpen(false) }}><Bell size={17} /><i /></button>{notificationsOpen && <div className="popover notification-popover"><div className="popover-heading"><div><strong>Notifications</strong><small>System updates</small></div><span className="new-label">Info</span></div><div className="notification-row"><span className="notification-icon cyan"><Activity size={15} /></span><div><strong>Stream monitoring is ready</strong><small>Configure your first source to begin</small></div></div><div className="notification-row"><span className="notification-icon purple"><Sparkles size={15} /></span><div><strong>Welcome to your console</strong><small>Your workspace has been provisioned</small></div></div></div>}</div>
         <div className="popover-wrap"><button aria-label="Open operator menu" className="profile-button" onClick={() => { setProfileOpen((value) => !value); setNotificationsOpen(false) }}><span className="avatar small">OP</span><ChevronDown size={13} /></button>{profileOpen && <div className="popover profile-popover"><div className="profile-summary"><span className="avatar">OP</span><div><strong>Operator</strong><small>Master access</small></div></div><button onClick={() => { onSettings(); setProfileOpen(false) }}><Settings size={14} /> Account settings</button><button onClick={onLogout}><LogOut size={14} /> Sign out</button></div>}</div>
@@ -588,7 +599,9 @@ function Dashboard({ isReseller, summary, activity, onAction, navigate }) {
       <div className="hero-row"><div><div className="eyebrow"><span className="eyebrow-line" />{isReseller ? 'RESELLER CONSOLE' : 'MASTER CONSOLE'}</div><h1>Good morning, Operator<span>.</span></h1><p className="page-description">Here’s what’s happening across your XTREME CABLE network today.</p></div><div className="date-chip"><CalendarDays size={15} />{new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: '2-digit', year: 'numeric' }).format(new Date())}</div></div>
       <div className="metric-grid">
         <MetricCard label="Active subscribers" value={metrics.activeSubscribers || 0} meta="From the subscriber ledger" icon={Users} tone="cyan" onClick={() => navigate('users')} />
-        {!isReseller && (
+        {isReseller ? (
+          <MetricCard label="Available credits" value={metrics.availableCredits || 0} meta="Line creation & renewal balance" icon={WalletCards} tone="purple" onClick={() => navigate('credits')} />
+        ) : (
           <>
             <MetricCard label="Live channels" value={metrics.liveChannels || 0} meta="Across all sources" icon={Tv} tone="purple" onClick={() => navigate('live-tv')} />
             <MetricCard label="Online streams" value={metrics.activeStreams || 0} meta="Tracked playback sessions" icon={Radio} tone="green" onClick={() => navigate('streams')} />
@@ -850,7 +863,10 @@ function UsersView({ users, resellers, onAction, onEdit, onDelete }) {
                         <span className="table-avatar">{user.name.slice(0, 2).toUpperCase()}</span>
                         <div>
                           <strong>{user.name}</strong>
-                          <small>@{user.username} {user.email ? `· ${user.email}` : ''}</small>
+                          <small style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
+                            <span>@{user.username} {user.email ? `· ${user.email}` : ''}</span>
+                            <span style={{ color: '#06b6d4', fontWeight: '600' }}>Pass: <code style={{ background: '#0f172a', color: '#38bdf8', padding: '1px 5px', borderRadius: '4px', fontFamily: 'monospace' }}>{userPass}</code></span>
+                          </small>
                         </div>
                       </div>
                     </td>
