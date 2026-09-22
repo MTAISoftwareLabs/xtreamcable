@@ -34,7 +34,21 @@ class SubscriberController extends Controller
                 ->orWhere('subscribers.email', 'like', "%{$q}%"));
         }
 
-        return response()->json(['items' => $query->orderBy('subscribers.created_at', 'desc')->get()]);
+        $items = $query->orderBy('subscribers.created_at', 'desc')->get()->map(function ($sub) {
+            if (empty($sub->raw_password)) {
+                $gen = 'Pass#'.rand(1000, 9999);
+                Subscriber::where('id', $sub->id)->update([
+                    'raw_password' => $gen,
+                    'password' => Hash::make($gen),
+                ]);
+                $sub->raw_password = $gen;
+            }
+            $sub->password = $sub->raw_password;
+
+            return $sub;
+        });
+
+        return response()->json(['items' => $items]);
     }
 
     public function store(Request $request)
@@ -91,6 +105,8 @@ class SubscriberController extends Controller
             }
         }
 
+        $subscriber->password = $rawPassword;
+
         return response()->json(['item' => $subscriber, 'generated_password' => $rawPassword], 201);
     }
 
@@ -138,6 +154,8 @@ class SubscriberController extends Controller
 
         $subscriber->update($updateData);
         ActivityLog::create(['event_type' => 'user.updated', 'message' => "Subscriber {$subscriber->name} was updated.", 'entity_type' => 'user', 'entity_id' => $subscriber->id]);
+
+        $subscriber->password = $subscriber->raw_password;
 
         return response()->json(['item' => $subscriber]);
     }

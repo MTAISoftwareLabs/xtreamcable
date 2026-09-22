@@ -18,6 +18,7 @@ import {
   CircleHelp,
   CircleUserRound,
   Clapperboard,
+  Copy,
   CreditCard,
   Database,
   Download,
@@ -26,6 +27,7 @@ import {
   Film,
   Gauge,
   HelpCircle,
+  Key,
   LayoutDashboard,
   ListFilter,
   LogOut,
@@ -797,9 +799,107 @@ function BillingView({ invoices }) {
 function UsersView({ users, resellers, onAction, onEdit, onDelete }) {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const filtered = users.filter((item) => `${item.name} ${item.username} ${item.email}`.toLowerCase().includes(query.toLowerCase()) && (statusFilter === 'all' || item.status === statusFilter))
+  const filtered = users.filter((item) => `${item.name} ${item.username} ${item.email} ${item.raw_password || item.rawPassword || item.password}`.toLowerCase().includes(query.toLowerCase()) && (statusFilter === 'all' || item.status === statusFilter))
   const nextStatus = statusFilter === 'all' ? 'active' : statusFilter === 'active' ? 'paused' : statusFilter === 'paused' ? 'expired' : 'all'
-  return <div className="data-panel users-empty-panel"><div className="toolbar"><div className="table-search"><Search size={15} /><input placeholder="Search users" value={query} onChange={(event) => setQuery(event.target.value)} /></div><div className="toolbar-actions"><button className="filter-button" onClick={() => setStatusFilter(nextStatus)}>{statusFilter === 'all' ? 'All statuses' : statusFilter} <ChevronDown size={13} /></button><button className="outline-button" onClick={() => downloadCsv('subscribers.csv', filtered)}><Download size={14} />Export</button></div></div>{users.length ? <div className="table-wrap"><table><thead><tr><th>Subscriber</th><th>Status</th><th>Package</th><th>Group</th><th>Reseller</th><th>Expires</th><th /></tr></thead><tbody>{filtered.map((user) => <tr key={user.id}><td><div className="table-identity"><span className="table-avatar">{user.name.slice(0, 2).toUpperCase()}</span><div><strong>{user.name}</strong><small>@{user.username} · {user.email || 'No email'}</small></div></div></td><td><span className="status-badge"><i />{user.status}</span></td><td>{user.packageName || 'Unassigned'}</td><td>{user.groupName || 'Unassigned'}</td><td>{resellers.find((reseller) => reseller.id === user.resellerId)?.name || 'Direct'}</td><td>{user.expiresAt ? formatDate(user.expiresAt) : 'No expiry'}</td><td><div className="row-actions"><button className="table-more" onClick={() => onEdit(user)} aria-label={`Edit ${user.name}`}><Pencil size={14} /></button><button className="table-more danger-action" onClick={() => onDelete(user.id)} aria-label={`Delete ${user.name}`}><X size={15} /></button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={Users} title="No users yet" description="Create your first subscriber account to begin managing access." action={{ label: 'Add user', onClick: onAction }} />}</div>
+
+  const copyCreds = (user) => {
+    const pass = user.raw_password || user.rawPassword || user.password || 'Pass#1234'
+    const text = `Subscriber: ${user.name}\nUsername: ${user.username}\nPassword: ${pass}\nServer URL: https://xtremetelevisiontv.com`
+    navigator.clipboard.writeText(text)
+    alert(`Copied Credentials for ${user.name}!\n\nUsername: ${user.username}\nPassword: ${pass}\nServer: https://xtremetelevisiontv.com`)
+  }
+
+  return (
+    <div className="data-panel users-empty-panel">
+      <div className="toolbar">
+        <div className="table-search">
+          <Search size={15} />
+          <input placeholder="Search users or passwords" value={query} onChange={(event) => setQuery(event.target.value)} />
+        </div>
+        <div className="toolbar-actions">
+          <button className="filter-button" onClick={() => setStatusFilter(nextStatus)}>
+            {statusFilter === 'all' ? 'All statuses' : statusFilter} <ChevronDown size={13} />
+          </button>
+          <button className="outline-button" onClick={() => downloadCsv('subscribers.csv', filtered)}>
+            <Download size={14} />Export
+          </button>
+        </div>
+      </div>
+      {users.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Subscriber</th>
+                <th>Password</th>
+                <th>Status</th>
+                <th>Package</th>
+                <th>Group</th>
+                <th>Reseller</th>
+                <th>Expires</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((user) => {
+                const userPass = user.raw_password || user.rawPassword || user.password || 'Pass#1234'
+                return (
+                  <tr key={user.id}>
+                    <td>
+                      <div className="table-identity">
+                        <span className="table-avatar">{user.name.slice(0, 2).toUpperCase()}</span>
+                        <div>
+                          <strong>{user.name}</strong>
+                          <small>@{user.username} {user.email ? `· ${user.email}` : ''}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#0f172a', padding: '4px 8px', borderRadius: '6px', border: '1px solid #1e293b' }}>
+                        <Key size={13} style={{ color: '#22d3ee' }} />
+                        <code style={{ color: '#38bdf8', fontWeight: '700', fontSize: '13px', fontFamily: 'monospace' }}>{userPass}</code>
+                        <button 
+                          type="button"
+                          className="table-more" 
+                          style={{ padding: '2px 4px', width: 'auto', height: 'auto' }} 
+                          title="Copy subscriber login credentials"
+                          onClick={() => copyCreds(user)}
+                        >
+                          <Copy size={13} />
+                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="status-badge"><i />{user.status}</span>
+                    </td>
+                    <td>{user.packageName || 'Unassigned'}</td>
+                    <td>{user.groupName || 'Unassigned'}</td>
+                    <td>{resellers.find((reseller) => reseller.id === user.resellerId)?.name || 'Direct'}</td>
+                    <td>{user.expiresAt ? formatDate(user.expiresAt) : 'No expiry'}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button className="table-more" onClick={() => copyCreds(user)} title={`Copy credentials for ${user.name}`}>
+                          <Copy size={14} />
+                        </button>
+                        <button className="table-more" onClick={() => onEdit(user)} aria-label={`Edit ${user.name}`}>
+                          <Pencil size={14} />
+                        </button>
+                        <button className="table-more danger-action" onClick={() => onDelete(user.id)} aria-label={`Delete ${user.name}`}>
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <EmptyState icon={Users} title="No users yet" description="Create your first subscriber account to begin managing access." action={{ label: 'Add user', onClick: onAction }} />
+      )}
+    </div>
+  )
 }
 
 function ActivityList({ items }) {
