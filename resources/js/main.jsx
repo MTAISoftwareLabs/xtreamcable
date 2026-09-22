@@ -878,6 +878,9 @@ function UsersView({ users, resellers, onAction, onEdit, onDelete }) {
                     <td>{user.expiresAt ? formatDate(user.expiresAt) : 'No expiry'}</td>
                     <td>
                       <div className="row-actions">
+                        <button className="table-more" onClick={() => onAction({ type: 'xtream_info', item: user })} title={`Xtream Code & M3U Links for ${user.name}`}>
+                          <Tv size={14} style={{ color: '#22d3ee' }} />
+                        </button>
                         <button className="table-more" onClick={() => copyCreds(user)} title={`Copy credentials for ${user.name}`}>
                           <Copy size={14} />
                         </button>
@@ -1060,31 +1063,111 @@ function GenericWorkspace({ page, navigate }) {
 }
 
 function BackendModal({ type, item, resellers, packages, groups, onClose, onSubmit, isReseller }) {
-  if (type === 'credentials_created') {
+  if (type === 'credentials_created' || type === 'xtream_info') {
+    const userPass = item?.password || item?.raw_password || item?.rawPassword || 'Pass#1234'
+    const username = item?.username || item?.email || item?.name || ''
+    const baseUrl = window.location.origin
+    const m3uUrl = `${baseUrl}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(userPass)}&type=m3u_plus&output=ts`
+    const epgUrl = `${baseUrl}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(userPass)}`
+    const xcInfoText = `Server URL: ${baseUrl}\nUsername: ${username}\nPassword: ${userPass}`
+
     return (
       <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
-        <div className="modal-card">
+        <div className="modal-card" style={{ maxWidth: '580px' }}>
           <div className="modal-header">
             <div>
-              <span className="section-kicker">SUCCESS</span>
-              <h2>Credentials Generated</h2>
-              <p>The login credentials have been configured and dispatched via email.</p>
+              <span className="section-kicker">XTREAM CODES & M3U PLAYLIST</span>
+              <h2>{item?.name || username} — Line Info</h2>
+              <p>Credentials & playlist links ready for IPTV apps (Smarters, TiviMate, XCIPTV, VLC).</p>
             </div>
             <button className="close-button" onClick={onClose}><X size={17} /></button>
           </div>
-          <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', margin: '16px 0', border: '1px solid #1e293b' }}>
-            <p style={{ margin: '0 0 8px 0', color: '#94a3b8', fontSize: '13px' }}>Account Name: <strong style={{ color: '#f8fafc' }}>{item?.name}</strong></p>
-            <p style={{ margin: '0 0 8px 0', color: '#94a3b8', fontSize: '13px' }}>Username / Email: <strong style={{ color: '#06b6d4' }}>{item?.username || item?.email}</strong></p>
-            <p style={{ margin: '0', color: '#94a3b8', fontSize: '13px' }}>Password: <code style={{ background: '#1e293b', color: '#22d3ee', padding: '4px 8px', borderRadius: '4px', fontSize: '15px', fontWeight: 'bold' }}>{item?.password}</code></p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', margin: '16px 0' }}>
+            {/* Xtream Codes Section */}
+            <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <strong style={{ color: '#38bdf8', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Tv size={15} /> Xtream Codes API Credentials
+                </strong>
+                <button 
+                  type="button" 
+                  className="outline-button" 
+                  style={{ padding: '3px 8px', fontSize: '11px' }}
+                  onClick={() => {
+                    navigator.clipboard.writeText(xcInfoText)
+                    alert('Xtream Codes credentials copied to clipboard!')
+                  }}
+                >
+                  <Copy size={12} /> Copy XC Info
+                </button>
+              </div>
+              <p style={{ margin: '0 0 6px 0', color: '#94a3b8', fontSize: '13px' }}>Server URL: <strong style={{ color: '#f8fafc', fontFamily: 'monospace' }}>{baseUrl}</strong></p>
+              <p style={{ margin: '0 0 6px 0', color: '#94a3b8', fontSize: '13px' }}>Username: <strong style={{ color: '#06b6d4', fontFamily: 'monospace' }}>{username}</strong></p>
+              <p style={{ margin: '0', color: '#94a3b8', fontSize: '13px' }}>Password: <code style={{ background: '#1e293b', color: '#22d3ee', padding: '3px 8px', borderRadius: '4px', fontSize: '14px', fontWeight: 'bold' }}>{userPass}</code></p>
+            </div>
+
+            {/* M3U Playlist Section */}
+            <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <strong style={{ color: '#a855f7', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Download size={15} /> M3U Plus Playlist & EPG
+                </strong>
+                <a 
+                  href={m3uUrl} 
+                  download={`playlist_${username}.m3u`}
+                  className="primary-button" 
+                  style={{ padding: '3px 10px', fontSize: '11px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <Download size={12} /> Download .m3u
+                </a>
+              </div>
+              <div style={{ margin: '0 0 10px 0' }}>
+                <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block', marginBottom: '4px' }}>M3U Plus Playlist URL:</span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input readOnly value={m3uUrl} style={{ background: '#020617', color: '#c084fc', fontSize: '12px', fontFamily: 'monospace', padding: '4px 8px', borderRadius: '4px', border: '1px solid #334155', flex: 1 }} />
+                  <button 
+                    type="button" 
+                    className="outline-button" 
+                    style={{ padding: '4px 8px' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(m3uUrl)
+                      alert('M3U URL copied to clipboard!')
+                    }}
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <span style={{ color: '#94a3b8', fontSize: '12px', display: 'block', marginBottom: '4px' }}>EPG XMLTV Guide URL:</span>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <input readOnly value={epgUrl} style={{ background: '#020617', color: '#38bdf8', fontSize: '12px', fontFamily: 'monospace', padding: '4px 8px', borderRadius: '4px', border: '1px solid #334155', flex: 1 }} />
+                  <button 
+                    type="button" 
+                    className="outline-button" 
+                    style={{ padding: '4px 8px' }}
+                    onClick={() => {
+                      navigator.clipboard.writeText(epgUrl)
+                      alert('EPG XMLTV URL copied to clipboard!')
+                    }}
+                  >
+                    <Copy size={13} />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
+
           <div className="modal-actions">
             <button type="button" className="primary-button" onClick={() => {
-              navigator.clipboard.writeText(`Account: ${item?.name}\nUsername/Email: ${item?.username || item?.email}\nPassword: ${item?.password}`)
-              alert('Credentials copied to clipboard!')
+              navigator.clipboard.writeText(`${xcInfoText}\n\nM3U Playlist: ${m3uUrl}\nEPG XMLTV: ${epgUrl}`)
+              alert('Full Xtream Codes info & M3U links copied to clipboard!')
             }}>
-              Copy Credentials
+              Copy All Links & Credentials
             </button>
-            <button type="button" className="outline-button" onClick={onClose}>Done</button>
+            <button type="button" className="outline-button" onClick={onClose}>Close</button>
           </div>
         </div>
       </div>
