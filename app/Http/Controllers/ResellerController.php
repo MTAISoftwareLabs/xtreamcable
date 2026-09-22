@@ -56,7 +56,7 @@ class ResellerController extends Controller
     public function update(Request $request, $id)
     {
         $reseller = Reseller::findOrFail($id);
-        
+
         $data = $request->all();
         if ($request->filled('password')) {
             $raw = trim($request->password);

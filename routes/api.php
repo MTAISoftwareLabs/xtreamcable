@@ -14,6 +14,7 @@ use App\Http\Controllers\StreamSourceController;
 use App\Http\Controllers\SubscriberController;
 use App\Http\Controllers\UserGroupController;
 use App\Http\Middleware\EnsureConsoleAuthenticated;
+use App\Http\Middleware\EnsureMasterAdmin;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('web')->group(function () {
@@ -32,7 +33,7 @@ Route::middleware('web')->group(function () {
         Route::get('/credits', [CreditController::class, 'index']);
 
         // Master-only routes
-        Route::middleware(\App\Http\Middleware\EnsureMasterAdmin::class)->group(function () {
+        Route::middleware(EnsureMasterAdmin::class)->group(function () {
             Route::apiResource('groups', UserGroupController::class);
             Route::apiResource('packages', PackageController::class);
             Route::apiResource('servers', ServerController::class);
