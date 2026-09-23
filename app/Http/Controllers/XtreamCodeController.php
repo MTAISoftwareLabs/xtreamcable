@@ -7,6 +7,7 @@ use App\Models\ContentItem;
 use App\Models\EpgSchedule;
 use App\Models\StreamSource;
 use App\Models\Subscriber;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 
@@ -17,6 +18,10 @@ class XtreamCodeController extends Controller
      */
     private function authenticateSubscriber($username, $password)
     {
+        if (! Model::getConnectionResolver()) {
+            Model::setConnectionResolver(app('db'));
+        }
+
         if (empty($username) || empty($password)) {
             return null;
         }
@@ -30,6 +35,8 @@ class XtreamCodeController extends Controller
         $isValidPass = false;
         if ($subscriber->raw_password && $subscriber->raw_password === $password) {
             $isValidPass = true;
+        } elseif ($subscriber->password && $subscriber->password === $password) {
+            $isValidPass = true;
         } elseif ($subscriber->password && Hash::check($password, $subscriber->password)) {
             $isValidPass = true;
         }
@@ -39,7 +46,7 @@ class XtreamCodeController extends Controller
         }
 
         // Check active status
-        if ($subscriber->status !== 'active') {
+        if ($subscriber->status && strtolower($subscriber->status) !== 'active') {
             return null;
         }
 
@@ -69,7 +76,7 @@ class XtreamCodeController extends Controller
                     'status' => 'Disabled',
                     'message' => 'Invalid username, password, or account expired.',
                 ],
-            ], 403);
+            ], 200);
         }
 
         $host = $request->getHost();
@@ -244,7 +251,7 @@ class XtreamCodeController extends Controller
         $subscriber = $this->authenticateSubscriber($username, $password);
 
         if (! $subscriber) {
-            return response("#EXTM3U\n#Invalid credentials or account expired\n", 403, [
+            return response("#EXTM3U\n#Invalid credentials or account expired\n", 200, [
                 'Content-Type' => 'text/plain',
             ]);
         }
@@ -326,7 +333,7 @@ class XtreamCodeController extends Controller
         $subscriber = $this->authenticateSubscriber($username, $password);
 
         if (! $subscriber) {
-            return response('<?xml version="1.0" encoding="UTF-8"?><tv></tv>', 403, [
+            return response('<?xml version="1.0" encoding="UTF-8"?><tv></tv>', 200, [
                 'Content-Type' => 'text/xml',
             ]);
         }

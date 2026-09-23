@@ -33,7 +33,8 @@ class XtreamCodeTest extends TestCase
     {
         $response = $this->get('/player_api.php?username=wrong&password=wrong');
 
-        $response->assertStatus(403);
+        $response->assertStatus(200);
+        $response->assertJsonPath('user_info.auth', 0);
     }
 
     public function test_get_m3u_playlist(): void

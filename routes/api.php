@@ -13,9 +13,17 @@ use App\Http\Controllers\ServerController;
 use App\Http\Controllers\StreamSourceController;
 use App\Http\Controllers\SubscriberController;
 use App\Http\Controllers\UserGroupController;
+use App\Http\Controllers\XtreamCodeController;
 use App\Http\Middleware\EnsureConsoleAuthenticated;
 use App\Http\Middleware\EnsureMasterAdmin;
 use Illuminate\Support\Facades\Route;
+
+Route::any('/player_api.php', [XtreamCodeController::class, 'playerApi']);
+Route::any('/player_api', [XtreamCodeController::class, 'playerApi']);
+Route::any('/get.php', [XtreamCodeController::class, 'getM3u']);
+Route::any('/get', [XtreamCodeController::class, 'getM3u']);
+Route::any('/xmltv.php', [XtreamCodeController::class, 'xmltv']);
+Route::any('/xmltv', [XtreamCodeController::class, 'xmltv']);
 
 Route::middleware('web')->group(function () {
     Route::get('/session', [AuthController::class, 'session']);

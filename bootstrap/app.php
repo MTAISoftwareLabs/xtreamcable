@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
             'api/*',
+            'player_api.php',
+            'get.php',
+            'xmltv.php',
+            'live/*',
         ]);
         $middleware->redirectGuestsTo(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson() ? null : '/'
