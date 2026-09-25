@@ -57,9 +57,9 @@ import {
   Zap,
 } from 'lucide-react'
 import './styles.css'
+import logoPath from './logo.png'
 
 const accent = '#28d8f2'
-const logoPath = '/attached_assets/logo_1788516695953.png'
 
 async function apiRequest(path, options = {}) {
   const response = await fetch(path, {

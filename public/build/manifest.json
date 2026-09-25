@@ -1,11 +1,18 @@
 {
+  "resources/js/logo.png": {
+    "file": "assets/logo-B_Ap3gNk.png",
+    "src": "resources/js/logo.png"
+  },
   "resources/js/main.jsx": {
-    "file": "assets/main-BKM1az-T.js",
+    "file": "assets/main--juGunA9.js",
     "name": "main",
     "src": "resources/js/main.jsx",
     "isEntry": true,
     "css": [
       "assets/main-MaL-qt32.css"
+    ],
+    "assets": [
+      "assets/logo-B_Ap3gNk.png"
     ]
   }
 }
